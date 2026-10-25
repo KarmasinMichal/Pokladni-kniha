@@ -182,6 +182,7 @@ textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid 
     <div class="f"><label for="period">Období</label><select id="period"></select></div>
     <div class="actions" style="margin:0">
       <button class="btn primary" id="printBtn" type="button">Vytisknout</button>
+      <button class="btn" id="pdfBtn" type="button">Uložit PDF</button>
           </div>
   </div>
 
@@ -357,7 +358,26 @@ $('setSave').onclick=()=>{
 };
 
 /* ---------- tisk ---------- */
-$('printBtn').onclick=()=>{$('sheet').innerHTML=sheetHTML();try{window.print()}catch(e){toast('Tisk se nepodařilo spustit, použijte Stáhnout pro tisk')}};
+$('printBtn').onclick=()=>{$('sheet').innerHTML=sheetHTML();try{window.print()}catch(e){toast('Tisk se nepodařilo spustit, použijte Uložit PDF')}};
+/* PDF – funguje i na mobilu; PDF se pak dá vytisknout nebo poslat */
+let h2p=null;
+function loadH2P(){if(window.html2pdf)return Promise.resolve();if(h2p)return h2p;h2p=new Promise((ok,ko)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';sc.onload=ok;sc.onerror=()=>{h2p=null;ko()};document.head.appendChild(sc)});return h2p}
+$('pdfBtn').onclick=async()=>{
+  const btn=$('pdfBtn');btn.disabled=true;const lbl=btn.textContent;btn.textContent='Připravuji PDF…';
+  try{
+    await loadH2P();
+    const name='pokladni-kniha-'+period+'.pdf';
+    const html='<div style="width:720px;background:#fff;color:#000;padding:4px">'+sheetHTML()+'</div>';
+    const blob=await html2pdf().set({margin:10,filename:name,image:{type:'jpeg',quality:0.95},html2canvas:{scale:2,backgroundColor:'#ffffff'},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy'],avoid:'tr'}}).from(html,'string').outputPdf('blob');
+    const file=new File([blob],name,{type:'application/pdf'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){
+      try{await navigator.share({files:[file],title:'Pokladní kniha'});return}catch(e){if(e&&e.name==='AbortError')return}
+    }
+    const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    toast('PDF staženo');
+  }catch(e){toast('PDF se nepodařilo vytvořit, zkontrolujte připojení')}
+  finally{btn.disabled=false;btn.textContent=lbl}
+};
 /* ---------- záloha ---------- */
 $('backupBtn').onclick=()=>{
   const blob=new Blob([JSON.stringify({app:'pokladni-kniha',version:1,entries,settings},null,2)],{type:'application/json'});
