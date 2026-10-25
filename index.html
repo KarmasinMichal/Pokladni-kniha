@@ -79,6 +79,8 @@ td.act button.del{color:var(--exp)}
 details summary{cursor:pointer;font-family:Fraunces,Georgia,serif;font-size:18px}
 details[open] summary{margin-bottom:12px}
 #sheet{display:none}
+.authbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;background:var(--teal-soft);border-radius:10px;padding:10px 14px;margin-bottom:18px;font-size:14px}
+.authbar .who{color:var(--ink)}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s}
 .toast.on{opacity:1}
 @media (prefers-reduced-motion:reduce){.toast{transition:none}}
@@ -125,6 +127,14 @@ details[open] summary{margin-bottom:12px}
     </div>
   </header>
 
+  <div class="authbar" id="authbar">
+    <span class="who" id="authText">Načítám přihlášení…</span>
+    <span class="actions" style="margin:0">
+      <button class="btn primary" id="loginBtn" type="button" hidden>Přihlásit přes Google</button>
+      <button class="btn ghost" id="logoutBtn" type="button" hidden>Odhlásit</button>
+    </span>
+  </div>
+
   <section class="panel" aria-labelledby="formTitle">
     <h2 id="formTitle">Nový zápis</h2>
     <div class="grid">
@@ -167,7 +177,7 @@ details[open] summary{margin-bottom:12px}
       <tbody id="rows"></tbody>
     </table>
   </div>
-  <div class="note" id="syncNote">Data se ukládají jen v tomto prohlížeči. Občas si udělejte zálohu.</div>
+  <div class="note" id="syncNote"></div>
 
   <section class="panel" style="margin-top:22px">
     <details id="setDetails">
@@ -212,15 +222,19 @@ function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');cl
 /* ---------- storage ---------- */
 function loadLocal(){try{const r=JSON.parse(localStorage.getItem(LKEY)||'null');if(r){entries=r.entries||[];settings=Object.assign(settings,r.settings||{})}}catch(e){}}
 function saveLocal(){try{localStorage.setItem(LKEY,JSON.stringify({entries,settings}))}catch(e){}}
+let cloud=null; // {saveEntry, deleteEntry, saveSettings, importAll}
 async function putEntry(e){
   const i=entries.findIndex(x=>x.id===e.id); if(i>=0)entries[i]=e; else entries.push(e);
   render(); saveLocal();
+  if(cloud){try{await cloud.saveEntry(e)}catch(err){toast('Zápis se nepodařilo uložit online, zkontrolujte připojení')}}
   }
 async function removeEntry(id){
   entries=entries.filter(x=>x.id!==id); render(); saveLocal();
+  if(cloud){try{await cloud.deleteEntry(id)}catch(err){toast('Smazání se nepodařilo uložit online')}}
   }
 async function putSettings(){
   render(); saveLocal();
+  if(cloud){try{await cloud.saveSettings(settings)}catch(err){toast('Nastavení se nepodařilo uložit online')}}
   }
 
 /* ---------- výpočty ---------- */
@@ -330,13 +344,83 @@ $('restoreFile').onchange=async ev=>{
   try{const d=JSON.parse(await f.text());if(!Array.isArray(d.entries))throw 0;
     if(!confirm('Načíst zálohu? Současné zápisy ('+entries.length+') budou nahrazeny zálohou ('+d.entries.length+').'))return;
     entries=d.entries;settings=Object.assign({firm:'',ico:'',address:'',keeper:'',opening:0},d.settings||{});
-    saveLocal();fillSettings();render();toast('Záloha načtena');
+    saveLocal();fillSettings();render();
+    if(cloud){try{await cloud.importAll(entries,settings,true)}catch(x){toast('Zálohu se nepodařilo nahrát online');return}}
+    toast('Záloha načtena');
   }catch(e){toast('Soubor není platná záloha pokladní knihy')}
 };
 
+/* ---------- Firebase: přihlášení a synchronizace ---------- */
+const firebaseConfig={
+  apiKey:"AIzaSyDb4fbTH9m1IHPu0ecoiiOx5q7KXJfzOBU",
+  authDomain:"pokladni-kniha-2a348.firebaseapp.com",
+  projectId:"pokladni-kniha-2a348",
+  storageBucket:"pokladni-kniha-2a348.firebasestorage.app",
+  messagingSenderId:"1495854512",
+  appId:"1:1495854512:web:bb7bdc98f0d5540b423a75"
+};
+const FB='https://www.gstatic.com/firebasejs/10.12.2/';
+function setAuthUI(state,user){
+  $('loginBtn').hidden=state!=='out';$('logoutBtn').hidden=state!=='in';
+  $('authText').textContent=state==='in'?'Přihlášen: '+(user.email||user.displayName||'')+'. Zápisy se ukládají online a uvidíte je na všech zařízeních.'
+    :state==='out'?'Nejste přihlášený. Zápisy se ukládají jen v tomto prohlížeči. Přihlaste se, aby se ukazovaly na všech zařízeních.'
+    :'Online ukládání teď není dostupné. Zápisy se ukládají jen v tomto prohlížeči.';
+  $('syncNote').textContent=state==='in'?'':'Bez přihlášení si občas stáhněte zálohu (Nastavení a záloha).';
+}
+async function initCloud(){
+  let A,AU,FS;
+  try{[A,AU,FS]=await Promise.all([import(FB+'firebase-app.js'),import(FB+'firebase-auth.js'),import(FB+'firebase-firestore.js')])}
+  catch(e){setAuthUI('off');return}
+  const app=A.initializeApp(firebaseConfig), auth=AU.getAuth(app), db=FS.getFirestore(app);
+  auth.languageCode='cs';
+  const provider=new AU.GoogleAuthProvider();
+  $('loginBtn').onclick=async()=>{
+    try{await AU.signInWithPopup(auth,provider)}
+    catch(e){
+      if(e&&(e.code==='auth/popup-blocked'||e.code==='auth/operation-not-supported-in-this-environment')){try{await AU.signInWithRedirect(auth,provider)}catch(x){toast('Přihlášení se nepovedlo')}}
+      else if(e&&e.code!=='auth/popup-closed-by-user'&&e.code!=='auth/cancelled-popup-request')toast('Přihlášení se nepovedlo: '+(e.code||''));
+    }
+  };
+  $('logoutBtn').onclick=async()=>{await AU.signOut(auth);toast('Odhlášeno')};
+  let unsubE=null,unsubS=null;
+  AU.onAuthStateChanged(auth,async user=>{
+    if(unsubE){unsubE();unsubE=null} if(unsubS){unsubS();unsubS=null}
+    if(!user){cloud=null;setAuthUI('out');return}
+    const ecol=FS.collection(db,'users',user.uid,'entries');
+    const sdoc=FS.doc(db,'users',user.uid,'meta','settings');
+    const strip=e=>{const {id,...b}=e;return b};
+    cloud={
+      saveEntry:e=>FS.setDoc(FS.doc(ecol,e.id),strip(e)),
+      deleteEntry:id=>FS.deleteDoc(FS.doc(ecol,id)),
+      saveSettings:st=>FS.setDoc(sdoc,{...st}),
+      async importAll(list,st,replace){
+        if(replace){const old=await FS.getDocs(ecol);for(let i=0;i<old.docs.length;i+=400){const b=FS.writeBatch(db);old.docs.slice(i,i+400).forEach(d=>b.delete(d.ref));await b.commit()}}
+        for(let i=0;i<list.length;i+=400){const b=FS.writeBatch(db);list.slice(i,i+400).forEach(e=>b.set(FS.doc(ecol,e.id),strip(e)));await b.commit()}
+        await FS.setDoc(sdoc,{...st});
+      }
+    };
+    setAuthUI('in',user);
+    // první přihlášení: přenést zápisy z tohoto prohlížeče do prázdného online účtu
+    try{
+      const [es,ss]=await Promise.all([FS.getDocs(ecol),FS.getDoc(sdoc)]);
+      if(es.empty&&!ss.exists()&&(entries.length||settings.firm)){
+        await cloud.importAll(entries,settings,false);toast('Zápisy z tohoto prohlížeče jsou nahrané online');
+      }
+    }catch(e){toast('Online data se nepodařilo načíst')}
+    unsubE=FS.onSnapshot(ecol,snap=>{
+      if(snap.metadata.hasPendingWrites)return;
+      entries=snap.docs.map(d=>({id:d.id,...d.data()}));saveLocal();render();
+    },()=>toast('Online data se nepodařilo načíst'));
+    unsubS=FS.onSnapshot(sdoc,d=>{
+      if(d.metadata.hasPendingWrites||!d.exists())return;
+      settings=Object.assign({firm:'',ico:'',address:'',keeper:'',opening:0},d.data());saveLocal();fillSettings();render();
+    });
+  });
+}
+
 /* ---------- start ---------- */
 $('fDate').value=today();
-loadLocal(); fillSettings(); render();
+loadLocal(); fillSettings(); render(); initCloud();
 })();
 </script>
 </body>

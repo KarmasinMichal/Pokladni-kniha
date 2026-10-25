@@ -24,8 +24,14 @@ Stačí otevřít `index.html` v prohlížeči.
 
 ## Kde jsou data
 
-Zápisy se ukládají do `localStorage` prohlížeče, tedy jen na zařízení a v prohlížeči, kde aplikaci používáte. Nic se neodesílá na internet. Pokud vymažete data prohlížeče, zápisy zmizí, proto si v **Nastavení a záloha** pravidelně stahujte zálohu. Stejnou zálohou přenesete data do jiného zařízení.
+Po přihlášení přes Google se zápisy ukládají do databáze Firebase (Firestore, umístění Frankfurt) a zobrazí se na každém zařízení, kde se přihlásíte stejným účtem. Pravidla databáze dovolují každému uživateli číst a měnit jen jeho vlastní data.
+
+Bez přihlášení se zápisy ukládají jen do `localStorage` prohlížeče. Při prvním přihlášení se automaticky nahrají online.
+
+Konfigurace Firebase v `index.html` (apiKey apod.) není tajná, u webových aplikací je veřejná vždy. Data chrání pravidla databáze.
+
+Přihlášení funguje jen z adres povolených ve Firebase (Authentication → Settings → Authorized domains): `localhost` a adresa vašich GitHub Pages. Při otevření souboru přímo z disku přihlášení nefunguje.
 
 ## Technologie
 
-Čisté HTML, CSS a JavaScript v jednom souboru, bez závislostí (jen písma z Google Fonts).
+Čisté HTML, CSS a JavaScript v jednom souboru. Firebase SDK a písma se načítají z CDN.
