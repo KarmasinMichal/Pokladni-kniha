@@ -136,14 +136,24 @@ textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid 
   <div class="authbar" id="authbar">
     <span class="who" id="authText">Načítám přihlášení…</span>
     <span class="actions" style="margin:0">
-      <button class="btn primary" id="loginBtn" type="button" hidden>Přihlásit přes Google</button>
       <button class="btn ghost" id="logoutBtn" type="button" hidden>Odhlásit</button>
     </span>
   </div>
 
   <section class="panel" id="gate">
     <h2 id="gateTitle">Přihlaste se</h2>
-    <p id="gateText" style="margin:0">Pokladní kniha je přístupná jen pro přihlášené. Přihlaste se svým Google účtem.</p>
+    <p id="gateText" style="margin:0 0 12px">Pokladní kniha je přístupná jen pro přihlášené.</p>
+    <div id="loginForm">
+      <div class="grid">
+        <div class="f s6"><label for="lUser">Uživatelské jméno</label><input id="lUser" autocomplete="username" autocapitalize="none"></div>
+        <div class="f s6"><label for="lPass">Heslo</label><input id="lPass" type="password" autocomplete="current-password"></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="lBtn" type="button">Přihlásit</button>
+        <button class="btn ghost" id="loginBtn" type="button">Správce: přihlásit přes Google</button>
+      </div>
+      <div class="note" id="lMsg" role="status"></div>
+    </div>
   </section>
 
   <section class="panel gated owner-only" aria-labelledby="formTitle">
@@ -201,12 +211,6 @@ textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid 
         <div class="f s4"><label for="sKeeper">Pokladník</label><input id="sKeeper"></div>
       </div>
       <div class="actions"><button class="btn primary" id="setSave" type="button">Uložit nastavení</button></div>
-      <div id="readersBox" hidden>
-        <h2 style="margin-top:22px">Kdo může knihu číst</h2>
-        <p class="note" style="margin-top:0">Napište e-maily Google účtů (každý na nový řádek). Tito lidé se přihlásí svým účtem a uvidí knihu, ale nemůžou nic zapsat ani změnit.</p>
-        <textarea id="readersIn" placeholder="jan.novak@gmail.com&#10;petr.svoboda@gmail.com"></textarea>
-        <div class="actions"><button class="btn primary" id="readersSave" type="button">Uložit přístupy</button></div>
-      </div>
       <h2 style="margin-top:22px">Záloha dat</h2>
       <p class="note" style="margin-top:0">Zálohu si uložte do počítače nebo cloudu. Přes ni přenesete data i do jiného prohlížeče.</p>
       <div class="actions"><button class="btn" id="backupBtn" type="button">Stáhnout zálohu</button><button class="btn" id="restoreBtn" type="button">Načíst zálohu</button>
@@ -383,23 +387,24 @@ const firebaseConfig={
 };
 const FB='https://www.gstatic.com/firebasejs/10.12.2/';
 const OWNER_EMAIL='michal.karmasin@gmail.com'; // jen tento účet může zapisovat
+const READER_USER='sdh vlkov'; // uživatelské jméno pro čtení (bez ohledu na velká písmena)
+const READER_EMAIL='sdhvlkov@pokladni-kniha-2a348.firebaseapp.com'; // interní účet ve Firebase
 function setRole(r,user){
   role=r;
   const b=document.body;
   b.classList.toggle('locked',r==='out'||r==='denied'||r==='init');
   b.classList.toggle('ro',r==='reader');
-  $('loginBtn').hidden=r!=='out';
+  $('loginForm').hidden=r!=='out';
   $('logoutBtn').hidden=!(r==='owner'||r==='reader'||r==='denied');
-  $('readersBox').hidden=r!=='owner';
   const em=user?(user.email||''):'';
   $('authText').innerHTML=
     r==='owner'?'Přihlášen: '+esc(em)+'<span class="badge">správce</span>':
-    r==='reader'?'Přihlášen: '+esc(em)+'<span class="badge">jen čtení</span>':
+    r==='reader'?'Přihlášen: SDH Vlkov<span class="badge">jen čtení</span>':
     r==='denied'?'Přihlášen: '+esc(em):
     r==='out'?'Nejste přihlášený.':
     r==='local'?'Online ukládání teď není dostupné. Zápisy se ukládají jen v tomto prohlížeči.':'Načítám přihlášení…';
-  if(r==='denied'){$('gateTitle').textContent='Nemáte přístup';$('gateText').textContent='Účet '+em+' zatím nemá povolené čtení. Požádejte správce pokladní knihy, aby tento e-mail přidal.';}
-  else if(r==='out'){$('gateTitle').textContent='Přihlaste se';$('gateText').textContent='Pokladní kniha je přístupná jen pro přihlášené. Přihlaste se svým Google účtem.';}
+  if(r==='denied'){$('gateTitle').textContent='Nemáte přístup';$('gateText').textContent='Účet '+em+' nemá do pokladní knihy přístup. Odhlaste se a přihlaste se jménem a heslem sboru.';}
+  else if(r==='out'){$('gateTitle').textContent='Přihlaste se';$('gateText').textContent='Pokladní kniha je přístupná jen pro přihlášené. Zadejte jméno a heslo sboru.';}
   else if(r==='init'){$('gateTitle').textContent='Načítám…';$('gateText').textContent='';}
   $('syncNote').textContent=r==='local'?'Bez online připojení si občas stáhněte zálohu (Nastavení a záloha).':'';
   render();
@@ -420,6 +425,16 @@ async function initCloud(){
     }
   };
   $('logoutBtn').onclick=async()=>{await AU.signOut(auth);toast('Odhlášeno')};
+  const readerLogin=async()=>{
+    const name=$('lUser').value.trim().toLowerCase().replace(/\s+/g,' '), pass=$('lPass').value, msg=$('lMsg');
+    if(!name||!pass){msg.textContent='Vyplňte jméno i heslo.';return}
+    if(name!==READER_USER){msg.textContent='Nesprávné jméno nebo heslo.';return}
+    msg.textContent='Přihlašuji…';
+    try{await AU.signInWithEmailAndPassword(auth,READER_EMAIL,pass);msg.textContent='';$('lPass').value=''}
+    catch(e){msg.textContent=e&&e.code==='auth/too-many-requests'?'Příliš mnoho pokusů. Zkuste to za pár minut.':'Nesprávné jméno nebo heslo.'}
+  };
+  $('lBtn').onclick=readerLogin;
+  $('lPass').onkeydown=e=>{if(e.key==='Enter')readerLogin()};
   const bookDoc=FS.doc(db,'books','main');
   const ecol=FS.collection(db,'books','main','entries');
   const strip=e=>{const {id,...b}=e;return b};
@@ -435,7 +450,6 @@ async function initCloud(){
         saveEntry:e=>FS.setDoc(FS.doc(ecol,e.id),strip(e)),
         deleteEntry:id=>FS.deleteDoc(FS.doc(ecol,id)),
         saveSettings:st=>FS.setDoc(bookDoc,{settings:{...st}},{merge:true}),
-        saveReaders:list=>FS.setDoc(bookDoc,{readers:list},{merge:true}),
         async importAll(list,st,replace){
           if(replace){const old=await FS.getDocs(ecol);for(let i=0;i<old.docs.length;i+=400){const b=FS.writeBatch(db);old.docs.slice(i,i+400).forEach(d=>b.delete(d.ref));await b.commit()}}
           for(let i=0;i<list.length;i+=400){const b=FS.writeBatch(db);list.slice(i,i+400).forEach(e=>b.set(FS.doc(ecol,e.id),strip(e)));await b.commit()}
@@ -454,7 +468,6 @@ async function initCloud(){
           }catch(x){}
           if(!list.length){loadLocal();list=entries;st=st||settings}
           await cloud.importAll(list,Object.assign({firm:'',ico:'',address:'',keeper:'',opening:0},st||{}),false);
-          await FS.setDoc(bookDoc,{readers:[]},{merge:true});
           if(list.length)toast('Dosavadní zápisy jsou nahrané do společné knihy');
         }
       }catch(e){toast('Online data se nepodařilo připravit')}
@@ -467,7 +480,7 @@ async function initCloud(){
       if(!decided){decided=true;setRole('reader',user);startEntries()}
       const data=d.data()||{};
       settings=Object.assign({firm:'',ico:'',address:'',keeper:'',opening:0},data.settings||{});
-      if(isOwner){$('readersIn').value=(data.readers||[]).join('\n');saveLocal()}
+      if(isOwner)saveLocal();
       fillSettings();render();
     },err=>{
       if(!isOwner){clearData();setRole('denied',user)}
@@ -481,13 +494,6 @@ async function initCloud(){
     }
     if(isOwner)startEntries();
   });
-  $('readersSave').onclick=async()=>{
-    if(!cloud)return;
-    const list=[...new Set($('readersIn').value.split(/[\s,;]+/).map(x=>x.trim().toLowerCase()).filter(Boolean))];
-    const bad=list.filter(x=>!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
-    if(bad.length){toast('Neplatný e-mail: '+bad[0]);return}
-    try{await cloud.saveReaders(list);toast('Přístupy uloženy ('+list.length+')')}catch(e){toast('Přístupy se nepodařilo uložit')}
-  };
 }
 
 /* ---------- start ---------- */
