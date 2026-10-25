@@ -22,15 +22,19 @@ Stačí otevřít `index.html` v prohlížeči.
 3. U **Source** zvolte **Deploy from a branch**, větev `main` a složku `/ (root)`.
 4. Po chvíli bude aplikace dostupná na `https://<uživatel>.github.io/<repozitář>/`.
 
+## Přístupy
+
+- **Správce** (účet nastavený v `OWNER_EMAIL` v `index.html` a v pravidlech Firestore) může zapisovat, upravovat, mazat a měnit nastavení.
+- **Čtenáři** se přihlásí vlastním Google účtem. Správce jejich e-maily zapíše v aplikaci do části *Nastavení a záloha → Kdo může knihu číst*. Čtenáři vidí knihu a můžou ji tisknout, ale nic nezmění.
+- Kdo není přihlášený nebo není na seznamu, neuvidí nic.
+
 ## Kde jsou data
 
-Po přihlášení přes Google se zápisy ukládají do databáze Firebase (Firestore, umístění Frankfurt) a zobrazí se na každém zařízení, kde se přihlásíte stejným účtem. Pravidla databáze dovolují každému uživateli číst a měnit jen jeho vlastní data.
+Zápisy jsou v databázi Firebase (Firestore, umístění Frankfurt), v jedné společné knize `books/main`. Oprávnění hlídají pravidla databáze, ne jen vzhled aplikace, takže čtenář nemůže zapisovat ani přes vývojářské nástroje.
 
-Bez přihlášení se zápisy ukládají jen do `localStorage` prohlížeče. Při prvním přihlášení se automaticky nahrají online.
+Konfigurace Firebase v `index.html` (apiKey apod.) není tajná, u webových aplikací je veřejná vždy.
 
-Konfigurace Firebase v `index.html` (apiKey apod.) není tajná, u webových aplikací je veřejná vždy. Data chrání pravidla databáze.
-
-Přihlášení funguje jen z adres povolených ve Firebase (Authentication → Settings → Authorized domains): `localhost` a adresa vašich GitHub Pages. Při otevření souboru přímo z disku přihlášení nefunguje.
+Přihlášení funguje jen z adres povolených ve Firebase (Authentication → Settings → Authorized domains): `localhost` a `karmasinmichal.github.io`.
 
 ## Technologie
 
