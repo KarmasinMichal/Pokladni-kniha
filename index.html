@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pokladní kniha</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F3F5F2; --surface:#FFFFFF; --ink:#18262B; --muted:#5E6E72; --line:#D6DDDA;
+  --teal:#0F4C5C; --teal-soft:#E2EEEF; --inc:#1C7350; --inc-soft:#E3F2EA; --exp:#A8332F; --exp-soft:#F8E6E4;
+  --focus:#2B7A8C;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#111A1C; --surface:#182427; --ink:#E6ECEA; --muted:#94A4A6; --line:#2B3A3D;
+    --teal:#7FC3CF; --teal-soft:#1E3539; --inc:#6FD0A2; --inc-soft:#163428; --exp:#F08F86; --exp-soft:#3A1F1D;
+    --focus:#7FC3CF; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#111A1C; --surface:#182427; --ink:#E6ECEA; --muted:#94A4A6; --line:#2B3A3D;
+  --teal:#7FC3CF; --teal-soft:#1E3539; --inc:#6FD0A2; --inc-soft:#163428; --exp:#F08F86; --exp-soft:#3A1F1D;
+  --focus:#7FC3CF; color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.5 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:12px 0 18px;border-bottom:2px solid var(--ink);margin-bottom:20px}
+h1{font-family:Fraunces,Georgia,serif;font-weight:650;font-size:clamp(28px,6vw,40px);line-height:1.05;margin:0;letter-spacing:-.01em}
+.firmline{color:var(--muted);font-size:14px;margin-top:4px}
+.balance{text-align:right}
+.balance .lbl{font-size:13px;color:var(--muted)}
+.balance .num{font-family:Fraunces,Georgia,serif;font-size:clamp(26px,5.5vw,34px);font-weight:500}
+.btn{font:inherit;font-weight:600;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:9px 14px;border-radius:8px;cursor:pointer}
+.btn:hover{border-color:var(--teal)}
+.btn.primary{background:var(--teal);border-color:var(--teal);color:var(--surface)}
+.btn.ghost{background:transparent}
+.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:18px}
+.panel h2{font-family:Fraunces,Georgia,serif;font-weight:500;font-size:20px;margin:0 0 12px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}
+.f{display:flex;flex-direction:column;gap:4px;grid-column:span 12}
+@media(min-width:640px){.s3{grid-column:span 3}.s4{grid-column:span 4}.s5{grid-column:span 5}.s6{grid-column:span 6}.s8{grid-column:span 8}}
+label{font-size:13px;color:var(--muted);font-weight:500}
+input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:8px;padding:9px 10px;width:100%;min-width:0}
+.toggle{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.toggle button{flex:1;font:inherit;font-weight:600;border:0;background:var(--paper);color:var(--muted);padding:9px;cursor:pointer}
+.toggle button[aria-pressed="true"].in{background:var(--inc-soft);color:var(--inc)}
+.toggle button[aria-pressed="true"].out{background:var(--exp-soft);color:var(--exp)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
+.toolbar .f{grid-column:auto;min-width:180px}
+.sums{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
+@media(min-width:640px){.sums{grid-template-columns:repeat(4,1fr)}}
+.sum{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.sum .lbl{font-size:12px;color:var(--muted)}
+.sum .v{font-weight:600;font-size:17px}
+.sum.inc .v{color:var(--inc)} .sum.exp .v{color:var(--exp)}
+.tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:680px}
+th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12.5px;color:var(--muted);font-weight:600;background:var(--paper)}
+td.n,th.n{text-align:right;white-space:nowrap}
+td.in{color:var(--inc);font-weight:600} td.out{color:var(--exp);font-weight:600}
+tr.openrow td{color:var(--muted);font-style:italic}
+td.act{white-space:nowrap;text-align:right}
+td.act button{font:inherit;font-size:13px;border:0;background:none;color:var(--teal);cursor:pointer;padding:2px 6px;text-decoration:underline}
+td.act button.del{color:var(--exp)}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.note{font-size:13px;color:var(--muted);margin-top:10px}
+details summary{cursor:pointer;font-family:Fraunces,Georgia,serif;font-size:18px}
+details[open] summary{margin-bottom:12px}
+#sheet{display:none}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:9px 16px;border-radius:999px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s}
+.toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){.toast{transition:none}}
+
+/* ---------- tisk ---------- */
+.sh{font-family:"Public Sans",Arial,sans-serif;color:#000;font-size:11pt}
+.sh h1{font-family:Fraunces,Georgia,serif;font-size:24pt;margin:0}
+.sh .hd{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2pt solid #000;padding-bottom:8pt;margin-bottom:10pt}
+.sh .meta{font-size:10pt;line-height:1.45}
+.sh .meta.r{text-align:right}
+.sh table{min-width:0;width:100%;border-collapse:collapse;font-size:9.5pt}
+.sh th{background:#E9EEEC;color:#000;border:0.6pt solid #777;padding:5pt 6pt;font-size:9pt}
+.sh td{border:0.6pt solid #999;padding:4pt 6pt;color:#000}
+.sh td.in,.sh td.out{font-weight:600;color:#000}
+.sh tr:nth-child(even) td{background:#F6F8F7}
+.sh tfoot td{font-weight:700;background:#E9EEEC;border-top:1.2pt solid #000}
+.sh .tot{display:flex;gap:24pt;justify-content:flex-end;margin-top:10pt;font-size:10.5pt}
+.sh .tot b{font-size:12pt}
+.sh .sig{display:flex;gap:40pt;margin-top:40pt}
+.sh .sig div{flex:1;border-top:0.8pt solid #000;padding-top:4pt;font-size:9pt;text-align:center}
+.sh .foot{margin-top:14pt;font-size:8pt;color:#555}
+@media print{
+  @page{size:A4;margin:14mm 12mm}
+  :root{padding:0}
+  body{background:#fff}
+  .app,.toast{display:none!important}
+  #sheet{display:block}
+  .sh thead{display:table-header-group}
+  .sh tr{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>Pokladní kniha</h1>
+      <div class="firmline" id="firmline">Doplňte název firmy v nastavení níže</div>
+    </div>
+    <div class="balance">
+      <div class="lbl">Aktuální stav pokladny</div>
+      <div class="num" id="curBal">0 Kč</div>
+    </div>
+  </header>
+
+  <section class="panel" aria-labelledby="formTitle">
+    <h2 id="formTitle">Nový zápis</h2>
+    <div class="grid">
+      <div class="f s6">
+        <label>Typ</label>
+        <div class="toggle" role="group" aria-label="Typ pohybu">
+          <button type="button" class="in" id="tIn" aria-pressed="true">Příjem</button>
+          <button type="button" class="out" id="tOut" aria-pressed="false">Výdaj</button>
+        </div>
+      </div>
+      <div class="f s3"><label for="fDate">Datum</label><input type="date" id="fDate"></div>
+      <div class="f s3"><label for="fDoc">Číslo dokladu</label><input id="fDoc" placeholder="P-001/2026"></div>
+      <div class="f s8"><label for="fText">Popis (text)</label><input id="fText" placeholder="např. Tržba za zboží, Nákup kancelářských potřeb"></div>
+      <div class="f s4"><label for="fAmt">Částka (Kč)</label><input id="fAmt" inputmode="decimal" placeholder="0,00"></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" id="saveBtn" type="button">Zapsat</button>
+      <button class="btn ghost" id="cancelBtn" type="button" hidden>Zrušit úpravu</button>
+    </div>
+    <div class="note" id="formMsg" role="status"></div>
+  </section>
+
+  <div class="toolbar">
+    <div class="f"><label for="period">Období</label><select id="period"></select></div>
+    <div class="actions" style="margin:0">
+      <button class="btn primary" id="printBtn" type="button">Vytisknout</button>
+          </div>
+  </div>
+
+  <div class="sums">
+    <div class="sum"><div class="lbl">Počáteční stav</div><div class="v" id="sOpen">0 Kč</div></div>
+    <div class="sum inc"><div class="lbl">Příjmy</div><div class="v" id="sIn">0 Kč</div></div>
+    <div class="sum exp"><div class="lbl">Výdaje</div><div class="v" id="sOut">0 Kč</div></div>
+    <div class="sum"><div class="lbl">Konečný stav</div><div class="v" id="sEnd">0 Kč</div></div>
+  </div>
+
+  <div class="tablebox">
+    <table>
+      <thead><tr><th>Datum</th><th>Doklad</th><th>Text</th><th class="n">Příjem</th><th class="n">Výdaj</th><th class="n">Zůstatek</th><th><span class="sr" style="position:absolute;left:-9999px">Akce</span></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="note" id="syncNote">Data se ukládají jen v tomto prohlížeči. Občas si udělejte zálohu.</div>
+
+  <section class="panel" style="margin-top:22px">
+    <details id="setDetails">
+      <summary>Nastavení a záloha</summary>
+      <div class="grid">
+        <div class="f s6"><label for="sFirm">Název firmy / jméno</label><input id="sFirm"></div>
+        <div class="f s3"><label for="sIco">IČO</label><input id="sIco" inputmode="numeric"></div>
+        <div class="f s3"><label for="sOpenIn">Počáteční stav (Kč)</label><input id="sOpenIn" inputmode="decimal" placeholder="0,00"></div>
+        <div class="f s8"><label for="sAddr">Adresa</label><input id="sAddr"></div>
+        <div class="f s4"><label for="sKeeper">Pokladník</label><input id="sKeeper"></div>
+      </div>
+      <div class="actions"><button class="btn primary" id="setSave" type="button">Uložit nastavení</button></div>
+      <h2 style="margin-top:22px">Záloha dat</h2>
+      <p class="note" style="margin-top:0">Zálohu si uložte do počítače nebo cloudu. Přes ni přenesete data i do jiného prohlížeče.</p>
+      <div class="actions"><button class="btn" id="backupBtn" type="button">Stáhnout zálohu</button><button class="btn" id="restoreBtn" type="button">Načíst zálohu</button>
+      <input type="file" id="restoreFile" accept=".json,application/json" hidden></div>
+    </details>
+  </section>
+</div>
+</div>
+<div id="sheet"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const fmt=new Intl.NumberFormat('cs-CZ',{style:'currency',currency:'CZK'});
+const money=v=>fmt.format(v||0);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const MONTHS=['leden','únor','březen','duben','květen','červen','červenec','srpen','září','říjen','listopad','prosinec'];
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')};
+const czDate=s=>{if(!s)return'';const[y,m,d]=s.split('-');return (+d)+'. '+(+m)+'. '+y};
+const parseAmt=s=>{const v=parseFloat(String(s).replace(/\s/g,'').replace(',','.'));return isFinite(v)?Math.round(v*100)/100:NaN};
+
+let entries=[]; // {id,date,doc,text,type,amount,created}
+let settings={firm:'',ico:'',address:'',keeper:'',opening:0};
+let type='in', editing=null, period='all';
+const LKEY='pokladni-kniha-v1';
+
+function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('on'),1800)}
+
+/* ---------- storage ---------- */
+function loadLocal(){try{const r=JSON.parse(localStorage.getItem(LKEY)||'null');if(r){entries=r.entries||[];settings=Object.assign(settings,r.settings||{})}}catch(e){}}
+function saveLocal(){try{localStorage.setItem(LKEY,JSON.stringify({entries,settings}))}catch(e){}}
+async function putEntry(e){
+  const i=entries.findIndex(x=>x.id===e.id); if(i>=0)entries[i]=e; else entries.push(e);
+  render(); saveLocal();
+  }
+async function removeEntry(id){
+  entries=entries.filter(x=>x.id!==id); render(); saveLocal();
+  }
+async function putSettings(){
+  render(); saveLocal();
+  }
+
+/* ---------- výpočty ---------- */
+const sorted=()=>[...entries].sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.created||0)-(b.created||0));
+function inPeriod(e,p){return p==='all'||e.date.startsWith(p)}
+function before(e,p){return p!=='all'&&e.date<p}
+function periodLabel(p){if(p==='all')return'Celé období';if(p.length===4)return'Rok '+p;const[y,m]=p.split('-');return MONTHS[+m-1].replace(/^./,c=>c.toUpperCase())+' '+y}
+function compute(p){
+  const all=sorted(); let open=+settings.opening||0;
+  all.forEach(e=>{if(before(e,p))open+=e.type==='in'?e.amount:-e.amount});
+  let bal=open,inc=0,out=0; const rows=[];
+  all.forEach(e=>{if(!inPeriod(e,p))return; if(e.type==='in'){bal+=e.amount;inc+=e.amount}else{bal-=e.amount;out+=e.amount} rows.push({e,bal})});
+  return {open,inc,out,end:bal,rows};
+}
+function nextDoc(t,date){
+  const y=(date||today()).slice(0,4), pre=t==='in'?'P':'V';
+  const n=entries.filter(e=>e.type===t&&e.date.slice(0,4)===y).length+1;
+  return pre+'-'+String(n).padStart(3,'0')+'/'+y;
+}
+
+/* ---------- vykreslení ---------- */
+function buildPeriods(){
+  const set=new Set(), years=new Set(); entries.forEach(e=>{set.add(e.date.slice(0,7));years.add(e.date.slice(0,4))});
+  const sel=$('period'); const opts=['all',...[...years].sort().reverse().flatMap(y=>[y,...[...set].filter(m=>m.startsWith(y)).sort().reverse()])];
+  if(!opts.includes(period))period='all';
+  sel.innerHTML=opts.map(o=>`<option value="${o}" ${o===period?'selected':''}>${o.length===7?'\u2003':''}${esc(periodLabel(o))}</option>`).join('');
+}
+function render(){
+  buildPeriods();
+  const c=compute(period), total=compute('all');
+  $('curBal').textContent=money(total.end);
+  $('sOpen').textContent=money(c.open);$('sIn').textContent=money(c.inc);$('sOut').textContent=money(c.out);$('sEnd').textContent=money(c.end);
+  $('firmline').textContent=settings.firm?[settings.firm,settings.ico?'IČO '+settings.ico:''].filter(Boolean).join(', '):'Doplňte název firmy v nastavení níže';
+  const tb=$('rows');
+  if(!c.rows.length){tb.innerHTML=`<tr><td colspan="7" class="empty">${entries.length?'V tomto období nejsou žádné zápisy.':'Zatím tu nic není. Zapište první příjem nebo výdaj nahoře.'}</td></tr>`;}
+  else tb.innerHTML=`<tr class="openrow"><td colspan="5">Počáteční stav</td><td class="n">${money(c.open)}</td><td></td></tr>`+
+    c.rows.map(({e,bal})=>`<tr><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td>
+      <td class="n ${e.type==='in'?'in':''}">${e.type==='in'?money(e.amount):''}</td>
+      <td class="n ${e.type==='out'?'out':''}">${e.type==='out'?money(e.amount):''}</td>
+      <td class="n">${money(bal)}</td>
+      <td class="act"><button data-edit="${e.id}">Upravit</button><button class="del" data-del="${e.id}">Smazat</button></td></tr>`).join('');
+  if(!editing&&!$('fDoc').dataset.touched)$('fDoc').value=nextDoc(type,$('fDate').value);
+}
+function sheetHTML(){
+  const c=compute(period); const s=settings;
+  const rows=c.rows.map(({e,bal},i)=>`<tr><td>${i+1}</td><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td><td class="n in">${e.type==='in'?money(e.amount):''}</td><td class="n out">${e.type==='out'?money(e.amount):''}</td><td class="n">${money(bal)}</td></tr>`).join('')
+    ||`<tr><td colspan="7" style="text-align:center;padding:14pt">Žádné zápisy</td></tr>`;
+  return `<div class="sh">
+  <div class="hd"><div><h1>Pokladní kniha</h1><div class="meta">${esc(s.firm||'')}${s.ico?'<br>IČO: '+esc(s.ico):''}${s.address?'<br>'+esc(s.address):''}</div></div>
+  <div class="meta r">Období: <b>${esc(periodLabel(period))}</b><br>Měna: CZK<br>Vytištěno: ${czDate(today())}</div></div>
+  <table><thead><tr><th>Č.</th><th>Datum</th><th>Doklad</th><th>Text</th><th class="n">Příjem</th><th class="n">Výdaj</th><th class="n">Zůstatek</th></tr></thead>
+  <tbody><tr><td></td><td colspan="5"><i>Počáteční stav</i></td><td class="n">${money(c.open)}</td></tr>${rows}</tbody>
+  <tfoot><tr><td colspan="4">Celkem za období</td><td class="n">${money(c.inc)}</td><td class="n">${money(c.out)}</td><td class="n">${money(c.end)}</td></tr></tfoot></table>
+  <div class="tot"><span>Počáteční stav: <b>${money(c.open)}</b></span><span>Konečný stav: <b>${money(c.end)}</b></span></div>
+  <div class="sig"><div>Pokladník${s.keeper?': '+esc(s.keeper):''}</div><div>Kontroloval</div><div>Datum a razítko</div></div>
+  </div>`;
+}
+
+/* ---------- formulář ---------- */
+function setType(t){type=t;$('tIn').setAttribute('aria-pressed',t==='in');$('tOut').setAttribute('aria-pressed',t==='out');if(!editing&&!$('fDoc').dataset.touched)$('fDoc').value=nextDoc(t,$('fDate').value)}
+function resetForm(){editing=null;$('fText').value='';$('fAmt').value='';$('fDoc').dataset.touched='';$('fDate').value=today();$('saveBtn').textContent='Zapsat';$('cancelBtn').hidden=true;$('formTitle').textContent='Nový zápis';setType(type)}
+$('tIn').onclick=()=>setType('in');$('tOut').onclick=()=>setType('out');
+$('fDoc').oninput=()=>{$('fDoc').dataset.touched='1'};
+$('fDate').onchange=()=>{if(!editing&&!$('fDoc').dataset.touched)$('fDoc').value=nextDoc(type,$('fDate').value)};
+$('saveBtn').onclick=()=>{
+  const amt=parseAmt($('fAmt').value), date=$('fDate').value, text=$('fText').value.trim();
+  const msg=$('formMsg');
+  if(!date){msg.textContent='Vyplňte datum.';return}
+  if(!(amt>0)){msg.textContent='Zadejte částku větší než nula, např. 1250,50.';$('fAmt').focus();return}
+  if(!text){msg.textContent='Napište krátký popis, ať víte, za co pohyb byl.';$('fText').focus();return}
+  msg.textContent='';
+  const base=editing?entries.find(e=>e.id===editing):null;
+  const e={id:base?base.id:'e_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),date,doc:$('fDoc').value.trim()||nextDoc(type,date),text,type,amount:amt,created:base?base.created:Date.now()};
+  putEntry(e); toast(editing?'Změny uloženy':'Zapsáno'); resetForm();
+};
+$('cancelBtn').onclick=resetForm;
+$('fAmt').onkeydown=e=>{if(e.key==='Enter')$('saveBtn').click()};
+$('rows').onclick=ev=>{
+  const ed=ev.target.closest('[data-edit]'), dl=ev.target.closest('[data-del]');
+  if(ed){const e=entries.find(x=>x.id===ed.dataset.edit);if(!e)return;editing=e.id;type=e.type;setType(e.type);
+    $('fDate').value=e.date;$('fDoc').value=e.doc;$('fText').value=e.text;$('fAmt').value=String(e.amount).replace('.',',');
+    $('saveBtn').textContent='Uložit změny';$('cancelBtn').hidden=false;$('formTitle').textContent='Úprava zápisu';window.scrollTo({top:0,behavior:'smooth'});$('fText').focus({preventScroll:true})}
+  if(dl){const e=entries.find(x=>x.id===dl.dataset.del);if(e&&confirm('Smazat zápis „'+e.text+'“ ('+money(e.amount)+')?')){removeEntry(e.id);toast('Smazáno')}}
+};
+$('period').onchange=e=>{period=e.target.value;render()};
+
+/* ---------- nastavení ---------- */
+function fillSettings(){$('sFirm').value=settings.firm||'';$('sIco').value=settings.ico||'';$('sAddr').value=settings.address||'';$('sKeeper').value=settings.keeper||'';$('sOpenIn').value=settings.opening?String(settings.opening).replace('.',','):''}
+$('setSave').onclick=()=>{
+  const o=$('sOpenIn').value.trim()?parseAmt($('sOpenIn').value):0;
+  if(isNaN(o)){toast('Počáteční stav musí být číslo');return}
+  settings={firm:$('sFirm').value.trim(),ico:$('sIco').value.trim(),address:$('sAddr').value.trim(),keeper:$('sKeeper').value.trim(),opening:o};
+  putSettings(); toast('Nastavení uloženo');
+};
+
+/* ---------- tisk ---------- */
+$('printBtn').onclick=()=>{$('sheet').innerHTML=sheetHTML();try{window.print()}catch(e){toast('Tisk se nepodařilo spustit, použijte Stáhnout pro tisk')}};
+/* ---------- záloha ---------- */
+$('backupBtn').onclick=()=>{
+  const blob=new Blob([JSON.stringify({app:'pokladni-kniha',version:1,entries,settings},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='pokladni-kniha-zaloha-'+today()+'.json';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast('Záloha stažena');
+};
+$('restoreBtn').onclick=()=>$('restoreFile').click();
+$('restoreFile').onchange=async ev=>{
+  const f=ev.target.files[0];ev.target.value='';if(!f)return;
+  try{const d=JSON.parse(await f.text());if(!Array.isArray(d.entries))throw 0;
+    if(!confirm('Načíst zálohu? Současné zápisy ('+entries.length+') budou nahrazeny zálohou ('+d.entries.length+').'))return;
+    entries=d.entries;settings=Object.assign({firm:'',ico:'',address:'',keeper:'',opening:0},d.settings||{});
+    saveLocal();fillSettings();render();toast('Záloha načtena');
+  }catch(e){toast('Soubor není platná záloha pokladní knihy')}
+};
+
+/* ---------- start ---------- */
+$('fDate').value=today();
+loadLocal(); fillSettings(); render();
+})();
+</script>
+</body>
+</html>
