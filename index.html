@@ -32,7 +32,7 @@
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 body{margin:0;background:var(--paper);color:var(--ink);font:400 15px/1.5 "Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
-.wrap{max-width:980px;margin:0 auto;padding:20px 16px 48px}
+.wrap{max-width:1127px;margin:0 auto;padding:20px 16px 48px}
 header.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:12px 0 18px;border-bottom:2px solid var(--ink);margin-bottom:20px}
 h1{font-family:Fraunces,Georgia,serif;font-weight:650;font-size:clamp(28px,6vw,40px);line-height:1.05;margin:0;letter-spacing:-.01em}
 .firmline{color:var(--muted);font-size:14px;margin-top:4px}
@@ -65,7 +65,7 @@ input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px so
 .sum .v{font-weight:600;font-size:17px}
 .sum.inc .v{color:var(--inc)} .sum.exp .v{color:var(--exp)}
 .tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
-table{border-collapse:collapse;width:100%;min-width:680px}
+table{border-collapse:collapse;width:100%;min-width:782px}
 th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
 th{font-size:12.5px;color:var(--muted);font-weight:600;background:var(--paper)}
 td.n,th.n{text-align:right;white-space:nowrap}
@@ -297,12 +297,12 @@ function render(){
   $('firmline').textContent=settings.firm?[settings.firm,settings.ico?'IČO '+settings.ico:''].filter(Boolean).join(', '):'Doplňte název firmy v nastavení níže';
   const tb=$('rows');
   if(!c.rows.length){tb.innerHTML=`<tr><td colspan="7" class="empty">${entries.length?'V tomto období nejsou žádné zápisy.':(document.body.classList.contains('ro')?'Zatím tu nejsou žádné zápisy.':'Zatím tu nic není. Zapište první příjem nebo výdaj nahoře.')}</td></tr>`;}
-  else tb.innerHTML=`<tr class="openrow"><td colspan="5">Počáteční stav</td><td class="n">${money(c.open)}</td><td class="owner-only"></td></tr>`+
-    c.rows.map(({e,bal})=>`<tr><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td>
+  else tb.innerHTML=c.rows.slice().reverse().map(({e,bal})=>`<tr><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td>
       <td class="n ${e.type==='in'?'in':''}">${e.type==='in'?money(e.amount):''}</td>
       <td class="n ${e.type==='out'?'out':''}">${e.type==='out'?money(e.amount):''}</td>
       <td class="n">${money(bal)}</td>
-      <td class="act owner-only"><button data-edit="${e.id}">Upravit</button><button class="del" data-del="${e.id}">Smazat</button></td></tr>`).join('');
+      <td class="act owner-only"><button data-edit="${e.id}">Upravit</button><button class="del" data-del="${e.id}">Smazat</button></td></tr>`).join('')+
+    `<tr class="openrow"><td colspan="5">Počáteční stav</td><td class="n">${money(c.open)}</td><td class="owner-only"></td></tr>`;
   if(!editing&&!$('fDoc').dataset.touched)$('fDoc').value=nextDoc(type,$('fDate').value);
 }
 function sheetHTML(){
