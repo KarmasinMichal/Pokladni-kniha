@@ -62,7 +62,7 @@ input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px so
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
 .toolbar .f{grid-column:auto;min-width:180px}
 .sums{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
-@media(min-width:640px){.sums{grid-template-columns:repeat(4,1fr)}}
+@media(min-width:640px){.sums{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
 .sum{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
 .sum .lbl{font-size:12px;color:var(--muted)}
 .sum .v{font-weight:600;font-size:17px}
@@ -301,6 +301,7 @@ function render(){
   buildPeriods();
   const c=compute(period), total=compute('all');
   $('curBal').textContent=money(total.end);
+  document.querySelector('.sum.inc').hidden=view==='out';document.querySelector('.sum.exp').hidden=view==='in';
   $('sOpen').textContent=money(c.open);$('sIn').textContent=money(c.inc);$('sOut').textContent=money(c.out);$('sEnd').textContent=money(c.end);
   $('firmline').textContent=settings.firm?[settings.firm,settings.ico?'IČO '+settings.ico:''].filter(Boolean).join(', '):'Doplňte název firmy v nastavení níže';
   const tb=$('rows');
