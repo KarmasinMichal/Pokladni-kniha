@@ -358,17 +358,44 @@ $('setSave').onclick=()=>{
 };
 
 /* ---------- tisk ---------- */
-$('printBtn').onclick=()=>{$('sheet').innerHTML=sheetHTML();try{window.print()}catch(e){toast('Tisk se nepodařilo spustit, použijte Uložit PDF')}};
-/* PDF – funguje i na mobilu; PDF se pak dá vytisknout nebo poslat */
-let h2p=null;
-function loadH2P(){if(window.html2pdf)return Promise.resolve();if(h2p)return h2p;h2p=new Promise((ok,ko)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';sc.onload=ok;sc.onerror=()=>{h2p=null;ko()};document.head.appendChild(sc)});return h2p}
-$('pdfBtn').onclick=async()=>{
-  const btn=$('pdfBtn');btn.disabled=true;const lbl=btn.textContent;btn.textContent='Připravuji PDF…';
+$('printBtn').onclick=()=>{if(isTouch()){makePdf($('printBtn'));return}$('sheet').innerHTML=sheetHTML();try{window.print()}catch(e){toast('Tisk se nepodařilo spustit, použijte Uložit PDF')}};
+/* PDF – vytváří se bez snímku obrazovky, takže funguje i na mobilu */
+let pdfLib=null;
+function loadScript(src){return new Promise((ok,ko)=>{const sc=document.createElement('script');sc.src=src;sc.onload=ok;sc.onerror=ko;document.head.appendChild(sc)})}
+function loadPdf(){if(window.pdfMake&&window.pdfMake.vfs)return Promise.resolve();if(pdfLib)return pdfLib;
+  pdfLib=loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js').then(()=>loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js')).catch(e=>{pdfLib=null;throw e});return pdfLib}
+const isTouch=()=>window.matchMedia&&window.matchMedia('(pointer:coarse)').matches;
+function pdfDoc(){
+  const c=compute(period), s=settings, m=v=>money(v).replace(/\u202F/g,'\u00A0');
+  const H=(t,al)=>({text:t,bold:true,fillColor:'#E9EEEC',fontSize:8.5,alignment:al||'left'});
+  const R=t=>({text:t,alignment:'right',noWrap:true});
+  const F=(t,al)=>({text:t,bold:true,fillColor:'#E9EEEC',alignment:al||'left',noWrap:!!al});
+  const body=[[H('Č.'),H('Datum'),H('Doklad'),H('Text'),H('Příjem','right'),H('Výdaj','right'),H('Zůstatek','right')]];
+  body.push(['',{text:'Počáteční stav',italics:true,colSpan:5},'','','','',R(m(c.open))]);
+  c.rows.forEach(({e,bal},i)=>body.push([String(i+1),{text:czDate(e.date),noWrap:true},e.doc||'',e.text||'',R(e.type==='in'?m(e.amount):''),R(e.type==='out'?m(e.amount):''),R(m(bal))]));
+  if(!c.rows.length)body.push([{text:'Žádné zápisy',colSpan:7,alignment:'center',margin:[0,6]},'','','','','','']);
+  body.push([{...F('Celkem za období'),colSpan:4},'','','',F(m(c.inc),'right'),F(m(c.out),'right'),F(m(c.end),'right')]);
+  const firm=[s.firm||'',s.ico?'IČO: '+s.ico:'',s.address||''].filter(Boolean).join('\n');
+  const sig=t=>({stack:[{canvas:[{type:'line',x1:0,y1:0,x2:150,y2:0,lineWidth:0.7}]},{text:t,fontSize:8,alignment:'center',margin:[0,3,0,0]}]});
+  return {pageSize:'A4',pageMargins:[32,32,32,40],defaultStyle:{fontSize:9},info:{title:'Pokladní kniha – '+periodLabel(period)},
+    footer:(cp,pc)=>({text:'Strana '+cp+' / '+pc,alignment:'right',fontSize:7,color:'#555',margin:[0,12,32,0]}),
+    content:[
+      {columns:[{stack:[{text:'Pokladní kniha',fontSize:22,bold:true},{text:firm,margin:[0,4,0,0]}]},
+        {width:'auto',alignment:'right',stack:[{text:['Období: ',{text:periodLabel(period),bold:true}]},'Měna: CZK','Vytištěno: '+czDate(today())]}]},
+      {canvas:[{type:'line',x1:0,y1:6,x2:531,y2:6,lineWidth:1.5}],margin:[0,0,0,10]},
+      {table:{headerRows:1,dontBreakRows:true,widths:[18,56,60,'*',64,64,68],body},
+       layout:{hLineWidth:()=>0.5,vLineWidth:()=>0.5,hLineColor:()=>'#999',vLineColor:()=>'#999',paddingTop:()=>3,paddingBottom:()=>3,
+         fillColor:(r,node)=>r>1&&r<node.table.body.length-1&&r%2===0?'#F6F8F7':null}},
+      {text:['Počáteční stav: ',{text:m(c.open),bold:true},'      Konečný stav: ',{text:m(c.end),bold:true}],alignment:'right',fontSize:10,margin:[0,8,0,0]},
+      {columns:[sig('Pokladník'+(s.keeper?': '+s.keeper:'')),sig('Kontroloval'),sig('Datum a razítko')],columnGap:20,margin:[0,48,0,0],unbreakable:true}
+    ]};
+}
+async function makePdf(btn){
+  btn.disabled=true;const lbl=btn.textContent;btn.textContent='Připravuji PDF…';
   try{
-    await loadH2P();
+    await loadPdf();
     const name='pokladni-kniha-'+period+'.pdf';
-    const html='<div style="width:720px;background:#fff;color:#000;padding:4px">'+sheetHTML()+'</div>';
-    const blob=await html2pdf().set({margin:10,filename:name,image:{type:'jpeg',quality:0.95},html2canvas:{scale:2,backgroundColor:'#ffffff'},jsPDF:{unit:'mm',format:'a4',orientation:'portrait'},pagebreak:{mode:['css','legacy'],avoid:'tr'}}).from(html,'string').outputPdf('blob');
+    const blob=await new Promise(ok=>pdfMake.createPdf(pdfDoc()).getBlob(ok));
     const file=new File([blob],name,{type:'application/pdf'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){
       try{await navigator.share({files:[file],title:'Pokladní kniha'});return}catch(e){if(e&&e.name==='AbortError')return}
@@ -377,7 +404,9 @@ $('pdfBtn').onclick=async()=>{
     toast('PDF staženo');
   }catch(e){toast('PDF se nepodařilo vytvořit, zkontrolujte připojení')}
   finally{btn.disabled=false;btn.textContent=lbl}
-};
+}
+$('pdfBtn').onclick=()=>makePdf($('pdfBtn'));
+if(isTouch())setTimeout(()=>loadPdf().catch(()=>{}),1500);
 /* ---------- záloha ---------- */
 $('backupBtn').onclick=()=>{
   const blob=new Blob([JSON.stringify({app:'pokladni-kniha',version:1,entries,settings},null,2)],{type:'application/json'});
