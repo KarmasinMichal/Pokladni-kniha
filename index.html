@@ -55,6 +55,9 @@ input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px so
 .toggle button{flex:1;font:inherit;font-weight:600;border:0;background:var(--paper);color:var(--muted);padding:9px;cursor:pointer}
 .toggle button[aria-pressed="true"].in{background:var(--inc-soft);color:var(--inc)}
 .toggle button[aria-pressed="true"].out{background:var(--exp-soft);color:var(--exp)}
+.toggle button[aria-pressed="true"].all{background:var(--teal-soft);color:var(--teal)}
+.toolbar .tabs{min-width:min(340px,100%)}
+.toolbar .tabs button{padding:9px 12px}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
 .toolbar .f{grid-column:auto;min-width:180px}
@@ -180,7 +183,10 @@ textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid 
   </section>
 
   <div class="toolbar gated">
-    <div class="f"><label for="period">Období</label><select id="period"></select></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div class="f"><label for="period">Období</label><select id="period"></select></div>
+      <div class="f tabs"><label>Zobrazit</label><div class="toggle" role="group" aria-label="Zobrazit" id="viewTabs"><button type="button" class="all" data-v="all" aria-pressed="true">Příjmy + výdaje</button><button type="button" class="in" data-v="in" aria-pressed="false">Jen příjmy</button><button type="button" class="out" data-v="out" aria-pressed="false">Jen výdaje</button></div></div>
+    </div>
     <div class="actions" style="margin:0">
       <button class="btn primary" id="printBtn" type="button">Vytisknout</button>
       <button class="btn" id="pdfBtn" type="button">Uložit PDF</button>
@@ -237,7 +243,8 @@ const parseAmt=s=>{const v=parseFloat(String(s).replace(/\s/g,'').replace(',','.
 
 let entries=[]; // {id,date,doc,text,type,amount,created}
 let settings={firm:'',ico:'',address:'',keeper:'',opening:0};
-let type='in', editing=null, period='all';
+let type='in', editing=null, period='all', view='all';
+const VIEWL={in:'jen příjmy',out:'jen výdaje'};
 const LKEY='pokladni-kniha-v1';
 
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('on'),1800)}
@@ -297,22 +304,23 @@ function render(){
   $('sOpen').textContent=money(c.open);$('sIn').textContent=money(c.inc);$('sOut').textContent=money(c.out);$('sEnd').textContent=money(c.end);
   $('firmline').textContent=settings.firm?[settings.firm,settings.ico?'IČO '+settings.ico:''].filter(Boolean).join(', '):'Doplňte název firmy v nastavení níže';
   const tb=$('rows');
-  if(!c.rows.length){tb.innerHTML=`<tr><td colspan="7" class="empty">${entries.length?'V tomto období nejsou žádné zápisy.':(document.body.classList.contains('ro')?'Zatím tu nejsou žádné zápisy.':'Zatím tu nic není. Zapište první příjem nebo výdaj nahoře.')}</td></tr>`;}
-  else tb.innerHTML=c.rows.slice().reverse().map(({e,bal})=>`<tr><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td>
+  const vis=c.rows.filter(r=>view==='all'||r.e.type===view);
+  if(!vis.length){tb.innerHTML=`<tr><td colspan="7" class="empty">${entries.length?'V tomto období nejsou žádné zápisy.':(document.body.classList.contains('ro')?'Zatím tu nejsou žádné zápisy.':'Zatím tu nic není. Zapište první příjem nebo výdaj nahoře.')}</td></tr>`;}
+  else tb.innerHTML=vis.slice().reverse().map(({e,bal})=>`<tr><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td>
       <td class="n ${e.type==='in'?'in':''}">${e.type==='in'?money(e.amount):''}</td>
       <td class="n ${e.type==='out'?'out':''}">${e.type==='out'?money(e.amount):''}</td>
       <td class="n">${money(bal)}</td>
       <td class="act owner-only"><button data-edit="${e.id}">Upravit</button><button class="del" data-del="${e.id}">Smazat</button></td></tr>`).join('')+
-    `<tr class="openrow"><td colspan="5">Počáteční stav</td><td class="n">${money(c.open)}</td><td class="owner-only"></td></tr>`;
+    (view==='all'?`<tr class="openrow"><td colspan="5">Počáteční stav</td><td class="n">${money(c.open)}</td><td class="owner-only"></td></tr>`:'');
   if(!editing&&!$('fDoc').dataset.touched)$('fDoc').value=nextDoc(type,$('fDate').value);
 }
 function sheetHTML(){
   const c=compute(period); const s=settings;
-  const rows=c.rows.map(({e,bal},i)=>`<tr><td>${i+1}</td><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td><td class="n in">${e.type==='in'?money(e.amount):''}</td><td class="n out">${e.type==='out'?money(e.amount):''}</td><td class="n">${money(bal)}</td></tr>`).join('')
+  const rows=c.rows.filter(r=>view==='all'||r.e.type===view).map(({e,bal},i)=>`<tr><td>${i+1}</td><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td><td class="n in">${e.type==='in'?money(e.amount):''}</td><td class="n out">${e.type==='out'?money(e.amount):''}</td><td class="n">${money(bal)}</td></tr>`).join('')
     ||`<tr><td colspan="7" style="text-align:center;padding:14pt">Žádné zápisy</td></tr>`;
   return `<div class="sh">
   <div class="hd"><div><h1>Pokladní kniha</h1><div class="meta">${esc(s.firm||'')}${s.ico?'<br>IČO: '+esc(s.ico):''}${s.address?'<br>'+esc(s.address):''}</div></div>
-  <div class="meta r">Období: <b>${esc(periodLabel(period))}</b><br>Měna: CZK<br>Vytištěno: ${czDate(today())}</div></div>
+  <div class="meta r">Období: <b>${esc(periodLabel(period))}${view==='all'?'':' – '+VIEWL[view]}</b><br>Měna: CZK<br>Vytištěno: ${czDate(today())}</div></div>
   <table><thead><tr><th>Č.</th><th>Datum</th><th>Doklad</th><th>Text</th><th class="n">Příjem</th><th class="n">Výdaj</th><th class="n">Zůstatek</th></tr></thead>
   <tbody><tr><td></td><td colspan="5"><i>Počáteční stav</i></td><td class="n">${money(c.open)}</td></tr>${rows}</tbody>
   <tfoot><tr><td colspan="4">Celkem za období</td><td class="n">${money(c.inc)}</td><td class="n">${money(c.out)}</td><td class="n">${money(c.end)}</td></tr></tfoot></table>
@@ -348,6 +356,7 @@ $('rows').onclick=ev=>{
   if(dl){const e=entries.find(x=>x.id===dl.dataset.del);if(e&&confirm('Smazat zápis „'+e.text+'“ ('+money(e.amount)+')?')){removeEntry(e.id);toast('Smazáno')}}
 };
 $('period').onchange=e=>{period=e.target.value;render()};
+document.querySelectorAll('#viewTabs button').forEach(b=>b.onclick=()=>{view=b.dataset.v;document.querySelectorAll('#viewTabs button').forEach(x=>x.setAttribute('aria-pressed',x===b));render()});
 
 /* ---------- nastavení ---------- */
 function fillSettings(){$('sFirm').value=settings.firm||'';$('sIco').value=settings.ico||'';$('sAddr').value=settings.address||'';$('sKeeper').value=settings.keeper||'';$('sOpenIn').value=settings.opening?String(settings.opening).replace('.',','):''}
@@ -373,7 +382,7 @@ function pdfDoc(){
   const F=(t,al)=>({text:t,bold:true,fillColor:'#E9EEEC',alignment:al||'left',noWrap:!!al});
   const body=[[H('Č.'),H('Datum'),H('Doklad'),H('Text'),H('Příjem','right'),H('Výdaj','right'),H('Zůstatek','right')]];
   body.push(['',{text:'Počáteční stav',italics:true,colSpan:5},'','','','',R(m(c.open))]);
-  c.rows.forEach(({e,bal},i)=>body.push([String(i+1),{text:czDate(e.date),noWrap:true},e.doc||'',e.text||'',R(e.type==='in'?m(e.amount):''),R(e.type==='out'?m(e.amount):''),R(m(bal))]));
+  c.rows.filter(r=>view==='all'||r.e.type===view).forEach(({e,bal},i)=>body.push([String(i+1),{text:czDate(e.date),noWrap:true},e.doc||'',e.text||'',R(e.type==='in'?m(e.amount):''),R(e.type==='out'?m(e.amount):''),R(m(bal))]));
   if(!c.rows.length)body.push([{text:'Žádné zápisy',colSpan:7,alignment:'center',margin:[0,6]},'','','','','','']);
   body.push([{...F('Celkem za období'),colSpan:4},'','','',F(m(c.inc),'right'),F(m(c.out),'right'),F(m(c.end),'right')]);
   const firm=[s.firm||'',s.ico?'IČO: '+s.ico:'',s.address||''].filter(Boolean).join('\n');
@@ -382,7 +391,7 @@ function pdfDoc(){
     footer:(cp,pc)=>({text:'Strana '+cp+' / '+pc,alignment:'right',fontSize:7,color:'#555',margin:[0,12,32,0]}),
     content:[
       {columns:[{stack:[{text:'Pokladní kniha',fontSize:22,bold:true},{text:firm,margin:[0,4,0,0]}]},
-        {width:'auto',alignment:'right',stack:[{text:['Období: ',{text:periodLabel(period),bold:true}]},'Měna: CZK','Vytištěno: '+czDate(today())]}]},
+        {width:'auto',alignment:'right',stack:[{text:['Období: ',{text:periodLabel(period)+(view==='all'?'':' – '+VIEWL[view]),bold:true}]},'Měna: CZK','Vytištěno: '+czDate(today())]}]},
       {canvas:[{type:'line',x1:0,y1:6,x2:531,y2:6,lineWidth:1.5}],margin:[0,0,0,10]},
       {table:{headerRows:1,dontBreakRows:true,widths:[18,56,60,'*',64,64,68],body},
        layout:{hLineWidth:()=>0.5,vLineWidth:()=>0.5,hLineColor:()=>'#999',vLineColor:()=>'#999',paddingTop:()=>3,paddingBottom:()=>3,
