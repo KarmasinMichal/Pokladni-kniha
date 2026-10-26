@@ -62,15 +62,16 @@ const host=$('extraTabs');
 host.innerHTML=`
 <section class="xt" id="tabLaws" hidden></section>
 <section class="xt" id="tabTax" hidden></section>
-<section class="xt" id="tabAssets" hidden></section>`;
+<section class="xt" id="tabAssets" hidden></section>
+<section class="xt" id="tabReg" hidden></section>`;
 $('tabLaws').innerHTML=lawsHTML();
 
 const tabs=[...document.querySelectorAll('#mainTabs button')];
 function setTab(t){
   tab=t; document.body.dataset.tab=t;
   tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
-  $('tabLaws').hidden=t!=='laws'; $('tabTax').hidden=t!=='tax'; $('tabAssets').hidden=t!=='assets';
-  if(t==='tax')renderTax(); if(t==='assets')renderAssets();
+  $('tabLaws').hidden=t!=='laws'; $('tabTax').hidden=t!=='tax'; $('tabAssets').hidden=t!=='assets'; $('tabReg').hidden=t!=='reg';
+  if(t==='tax')renderTax(); if(t==='assets')renderAssets(); if(t==='reg')renderReg();
   try{history.replaceState(null,'',t==='book'?location.pathname:'#'+t)}catch(e){}
 }
 tabs.forEach(b=>b.onclick=()=>setTab(b.dataset.t));
@@ -186,6 +187,74 @@ function renderAssets(){
   el.querySelectorAll('[data-on]').forEach(b=>b.onclick=()=>set(b.dataset.on,true));
 }
 
+/* ---------- živnostenský list a výpis z rejstříků (živě z ARES) ---------- */
+const ARES='https://ares.gov.cz/ekonomicke-subjekty-v-be/rest/';
+let reg=null, regLoading=false;
+const DRUH={R:'Řemeslná',L:'Volná',K:'Koncesovaná',V:'Vázaná'};
+const SOUD={MSPH:'Městského soudu v Praze',KSBR:'Krajského soudu v Brně',KSCB:'Krajského soudu v Českých Budějovicích',KSHK:'Krajského soudu v Hradci Králové',KSPL:'Krajského soudu v Plzni',KSUL:'Krajského soudu v Ústí nad Labem',KSOS:'Krajského soudu v Ostravě'};
+const ZDROJ={Ros:'Registr osob',Vr:'Veřejný (spolkový) rejstřík',Res:'Registr ekonomických subjektů',Rzp:'Živnostenský rejstřík',Dph:'Registr plátců DPH',Nrpzs:'Registr zdravotnických zařízení',Rpsh:'Registr politických stran',Rcns:'Registr církví',Szr:'Zemědělský registr',Rs:'Registr škol',Ceu:'Evidence úpadců'};
+const PFORMA={'736':'Pobočný spolek','706':'Spolek'};
+const curr=a=>(a||[]).filter(x=>!x.datumVymazu&&!x.platnostDo&&!x.datumZaniku);
+const dt=s=>s?czDate(String(s).slice(0,10)):'—';
+const nm=o=>o?((o.jmeno||'')+' '+(o.prijmeni||'')).trim().toLowerCase().replace(/(^|[\s-])\S/g,m=>m.toUpperCase()):'';
+const icoNum=()=>String(PK.settings.ico||'').replace(/\D/g,'');
+async function loadReg(){
+  const ico=icoNum(); if(!ico){reg={err:'V nastavení chybí IČO sboru.'};return}
+  regLoading=true; renderReg();
+  const get=p=>fetch(ARES+p+'/'+ico).then(r=>r.ok?r.json():null).catch(()=>null);
+  const [es,rzp,vr]=await Promise.all([get('ekonomicke-subjekty'),get('ekonomicke-subjekty-rzp'),get('ekonomicke-subjekty-vr')]);
+  regLoading=false;
+  reg=es?{es,rzp:rzp&&rzp.zaznamy?rzp.zaznamy[0]:null,vr:vr&&vr.zaznamy?(vr.zaznamy.find(z=>z.primarniZaznam)||vr.zaznamy[0]):null,at:new Date()}:{err:'Údaje se nepodařilo načíst z ARES. Zkuste to za chvíli znovu.'};
+  if(tab==='reg')renderReg();
+}
+function renderReg(){
+  const el=$('tabReg'); const ico=icoNum();
+  const links=ico?`<div class="actions" style="margin:6px 0 14px">
+    <button class="btn" type="button" id="regReload">Načíst znovu</button>
+    <a class="btn" href="https://or.justice.cz/ias/ui/rejstrik-$firma?ico=${ico}" target="_blank" rel="noopener">Úplný výpis – spolkový rejstřík (justice.cz)</a>
+    <a class="btn" href="https://ares.gov.cz/ekonomicke-subjekty?ico=${ico}" target="_blank" rel="noopener">Výpis v ARES</a></div>`:'';
+  const head=`<h2>Živnostenský list a výpis z rejstříků</h2>
+  <p class="lead">Údaje se načítají živě z veřejného systému ARES Ministerstva financí (živnostenský rejstřík, spolkový rejstřík a registr ekonomických subjektů), takže jsou vždy aktuální.</p>${links}`;
+  if(!reg&&!regLoading){el.innerHTML=head+'<p>Načítám…</p>';loadReg();bindReg();return}
+  if(regLoading){el.innerHTML=head+'<p>Načítám údaje z ARES…</p>';bindReg();return}
+  if(reg.err){el.innerHTML=head+`<div class="warnbox">${esc(reg.err)}</div>`;bindReg();return}
+  const es=reg.es, rz=reg.rzp, vr=reg.vr;
+  const kv=(l,v)=>`<div><div class="l">${l}</div><div class="v">${v}</div></div>`;
+  const regs=Object.entries(es.seznamRegistraci||{}).filter(([k,v])=>v==='AKTIVNI').map(([k])=>ZDROJ[k.replace('stavZdroje','')]||k.replace('stavZdroje','')).join(', ');
+  let html=head+`<h3>Základní údaje</h3><div class="dp-head">
+    ${kv('Název',esc(es.obchodniJmeno||''))}${kv('IČO',esc(es.ico||''))}
+    ${kv('Právní forma',esc(PFORMA[es.pravniForma]||es.pravniForma||''))}${kv('Sídlo',esc((es.sidlo&&es.sidlo.textovaAdresa)||''))}
+    ${kv('Datum vzniku',dt(es.datumVzniku))}${kv('Aktivní v registrech',esc(regs||'—'))}</div>`;
+  if(rz){
+    const zv=(rz.zivnosti||[]);
+    const act=zv.filter(z=>!z.datumZaniku);
+    const rows=zv.map(z=>{
+      const stop=z.datumZaniku?'Zaniklá '+dt(z.datumZaniku):(curr(z.preruseni||[]).length?'Přerušená':'Aktivní');
+      const ob=curr(z.oboryCinnosti).map(o=>esc(o.oborNazev)).join('; ');
+      const oz=curr(z.odpovedniZastupci).map(nm).join(', ');
+      return `<tr><td><b>${esc(z.predmetPodnikani||'')}</b>${ob?`<span style="display:block;font-size:12.5px;color:var(--muted)">Obory: ${ob}</span>`:''}${oz?`<span style="display:block;font-size:12.5px;color:var(--muted)">Odpovědný zástupce: ${esc(oz)}</span>`:''}</td><td class="nw">${esc(DRUH[z.druhZivnosti]||z.druhZivnosti||'')}</td><td class="nw">${dt(z.datumVzniku)}</td><td class="nw"><span class="pill ${stop==='Aktivní'?'drm':'dhm'}">${stop}</span></td></tr>`}).join('');
+    const stat=curr(rz.angazovaneOsoby).map(nm).join(', ');
+    html+=`<h3>Živnostenská oprávnění</h3>
+    ${act.length?`<div class="okbox">Sbor má <b>${act.length}</b> aktivní živnostenské oprávnění. Opravňují ho k vedlejší hospodářské činnosti (občerstvení, prodej nápojů), jejíž příjmy se zdaňují.</div>`:'<div class="warnbox">Sbor nemá aktivní živnostenské oprávnění.</div>'}
+    <div class="xbox"><table class="astable"><thead><tr><th>Předmět podnikání</th><th>Druh živnosti</th><th>Vznik oprávnění</th><th>Stav</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="dp-head" style="margin-top:12px">${kv('Statutární zástupci (RŽP)',esc(stat||'—'))}${kv('Živnostenský úřad (kód)',esc(rz.zivnostenskyUrad||'—'))}${kv('Aktualizace v RŽP',dt(rz.datumAktualizace))}</div>`;
+  }
+  if(vr){
+    const sz=curr(vr.spisovaZnacka)[0]||(vr.spisovaZnacka||[])[0];
+    const orgs=curr(vr.statutarniOrgany).map(o=>`<li><b>${esc(o.nazevOrganu||'Statutární orgán')}</b>: ${curr(o.clenoveOrganu).map(c=>esc(nm(c.fyzickaOsoba)||(c.pravnickaOsoba&&c.pravnickaOsoba.obchodniJmeno)||'')+((c.clenstvi&&c.clenstvi.funkce&&c.clenstvi.funkce.nazev)?' – '+esc(c.clenstvi.funkce.nazev):'')+(c.clenstvi&&c.clenstvi.funkce&&c.clenstvi.funkce.vznikFunkce?' (od '+dt(c.clenstvi.funkce.vznikFunkce)+')':'')).join('; ')}</li>`).join('');
+    const ucel=curr(vr.cinnosti&&vr.cinnosti.ucel).map(x=>esc(x.hodnota)).join('<br>');
+    const nejv=curr(vr.nazevNejvyssihoOrganu).map(x=>esc(x.hodnota)).join(', ');
+    html+=`<h3>Spolkový rejstřík</h3><div class="dp-head">
+      ${kv('Spisová značka',sz?esc(sz.oddil+' '+sz.vlozka)+' vedená u '+esc(SOUD[sz.soud]||sz.soud):'—')}
+      ${kv('Zapsáno',dt(vr.datumZapisu))}${kv('Nejvyšší orgán',nejv||'—')}${kv('Aktualizace v rejstříku',dt(vr.datumAktualizace))}</div>
+      ${orgs?`<div class="law"><h4>Statutární orgán</h4><ul>${orgs}</ul></div>`:''}
+      ${ucel?`<div class="law"><h4>Účel spolku</h4><div style="white-space:pre-wrap;font-size:14px">${ucel}</div></div>`:''}`;
+  }
+  html+=`<p class="note">Načteno ${reg.at.toLocaleString('cs-CZ')} ze systému ARES. Pro úřední účely (dotace, banka, úřad) si stáhněte ověřený výpis přes odkaz na justice.cz výše nebo na kontaktním místě Czech POINT.</p>`;
+  el.innerHTML=html; bindReg();
+}
+function bindReg(){const b=$('regReload'); if(b)b.onclick=()=>{reg=null;renderReg()}}
+
 /* ---------- zákony a předpisy ---------- */
 function lawsHTML(){
   const L=(title,url,items)=>`<div class="law"><h4><a href="${url}" target="_blank" rel="noopener">${title}</a></h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
@@ -231,5 +300,5 @@ function lawsHTML(){
 }
 
 /* ---------- start ---------- */
-const h0=(location.hash||'').slice(1); setTab(['laws','tax','assets'].includes(h0)?h0:'book');
+const h0=(location.hash||'').slice(1); setTab(['laws','tax','assets','reg'].includes(h0)?h0:'book');
 })();
