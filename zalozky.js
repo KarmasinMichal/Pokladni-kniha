@@ -75,7 +75,7 @@ function setTab(t){
   try{history.replaceState(null,'',t==='book'?location.pathname:'#'+t)}catch(e){}
 }
 tabs.forEach(b=>b.onclick=()=>setTab(b.dataset.t));
-PK.onRender=()=>{if(tab==='tax')renderTax(); if(tab==='assets')renderAssets()};
+PK.onRender=()=>{if(tab==='tax')renderTax(); if(tab==='assets')renderAssets(); if(tab==='reg'&&!reg&&!regLoading)renderReg()};
 
 /* ---------- pomocné ---------- */
 const years=()=>{const s=new Set(PK.entries.map(e=>(e.date||'').slice(0,4)).filter(Boolean));s.add(String(new Date().getFullYear()));return [...s].sort().reverse()};
@@ -215,6 +215,7 @@ function renderReg(){
     <a class="btn" href="https://ares.gov.cz/ekonomicke-subjekty?ico=${ico}" target="_blank" rel="noopener">Výpis v ARES</a></div>`:'';
   const head=`<h2>Živnostenský list a výpis z rejstříků</h2>
   <p class="lead">Údaje se načítají živě z veřejného systému ARES Ministerstva financí (živnostenský rejstřík, spolkový rejstřík a registr ekonomických subjektů), takže jsou vždy aktuální.</p>${links}`;
+  if(!ico){el.innerHTML=head+'<p>Čekám na údaje sboru… IČO se bere z Nastavení.</p>';return}
   if(!reg&&!regLoading){el.innerHTML=head+'<p>Načítám…</p>';loadReg();bindReg();return}
   if(regLoading){el.innerHTML=head+'<p>Načítám údaje z ARES…</p>';bindReg();return}
   if(reg.err){el.innerHTML=head+`<div class="warnbox">${esc(reg.err)}</div>`;bindReg();return}
@@ -235,7 +236,7 @@ function renderReg(){
       return `<tr><td><b>${esc(z.predmetPodnikani||'')}</b>${ob?`<span style="display:block;font-size:12.5px;color:var(--muted)">Obory: ${ob}</span>`:''}${oz?`<span style="display:block;font-size:12.5px;color:var(--muted)">Odpovědný zástupce: ${esc(oz)}</span>`:''}</td><td class="nw">${esc(DRUH[z.druhZivnosti]||z.druhZivnosti||'')}</td><td class="nw">${dt(z.datumVzniku)}</td><td class="nw"><span class="pill ${stop==='Aktivní'?'drm':'dhm'}">${stop}</span></td></tr>`}).join('');
     const stat=curr(rz.angazovaneOsoby).map(nm).join(', ');
     html+=`<h3>Živnostenská oprávnění</h3>
-    ${act.length?`<div class="okbox">Sbor má <b>${act.length}</b> aktivní živnostenské oprávnění. Opravňují ho k vedlejší hospodářské činnosti (občerstvení, prodej nápojů), jejíž příjmy se zdaňují.</div>`:'<div class="warnbox">Sbor nemá aktivní živnostenské oprávnění.</div>'}
+    ${act.length?`<div class="okbox">Sbor má <b>${act.length}</b> ${act.length===1?'aktivní živnostenské oprávnění':act.length<5?'aktivní živnostenská oprávnění':'aktivních živnostenských oprávnění'}. Opravňují ho k vedlejší hospodářské činnosti (občerstvení, prodej nápojů), jejíž příjmy se zdaňují.</div>`:'<div class="warnbox">Sbor nemá aktivní živnostenské oprávnění.</div>'}
     <div class="xbox"><table class="astable"><thead><tr><th>Předmět podnikání</th><th>Druh živnosti</th><th>Vznik oprávnění</th><th>Stav</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="dp-head" style="margin-top:12px">${kv('Statutární zástupci (RŽP)',esc(stat||'—'))}${kv('Živnostenský úřad (kód)',esc(rz.zivnostenskyUrad||'—'))}${kv('Aktualizace v RŽP',dt(rz.datumAktualizace))}</div>`;
   }
