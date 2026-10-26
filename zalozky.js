@@ -63,19 +63,20 @@ host.innerHTML=`
 <section class="xt" id="tabLaws" hidden></section>
 <section class="xt" id="tabTax" hidden></section>
 <section class="xt" id="tabAssets" hidden></section>
-<section class="xt" id="tabReg" hidden></section>`;
+<section class="xt" id="tabReg" hidden></section>
+<section class="xt" id="tabCheck" hidden></section>`;
 $('tabLaws').innerHTML=lawsHTML();
 
 const tabs=[...document.querySelectorAll('#mainTabs button')];
 function setTab(t){
   tab=t; document.body.dataset.tab=t;
   tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
-  $('tabLaws').hidden=t!=='laws'; $('tabTax').hidden=t!=='tax'; $('tabAssets').hidden=t!=='assets'; $('tabReg').hidden=t!=='reg';
-  if(t==='tax')renderTax(); if(t==='assets')renderAssets(); if(t==='reg')renderReg();
+  $('tabLaws').hidden=t!=='laws'; $('tabTax').hidden=t!=='tax'; $('tabAssets').hidden=t!=='assets'; $('tabReg').hidden=t!=='reg'; $('tabCheck').hidden=t!=='check';
+  if(t==='tax')renderTax(); if(t==='assets')renderAssets(); if(t==='reg')renderReg(); if(t==='check')renderCheck();
   try{history.replaceState(null,'',t==='book'?location.pathname:'#'+t)}catch(e){}
 }
 tabs.forEach(b=>b.onclick=()=>setTab(b.dataset.t));
-PK.onRender=()=>{if(tab==='tax')renderTax(); if(tab==='assets')renderAssets(); if(tab==='reg'&&!reg&&!regLoading)renderReg()};
+PK.onRender=()=>{if(tab==='tax')renderTax(); if(tab==='assets')renderAssets(); if(tab==='reg'&&!reg&&!regLoading)renderReg(); if(tab==='check')renderCheck()};
 
 /* ---------- pomocné ---------- */
 const years=()=>{const s=new Set(PK.entries.map(e=>(e.date||'').slice(0,4)).filter(Boolean));s.add(String(new Date().getFullYear()));return [...s].sort().reverse()};
@@ -256,6 +257,84 @@ function renderReg(){
 }
 function bindReg(){const b=$('regReload'); if(b)b.onclick=()=>{reg=null;renderReg()}}
 
+/* ---------- kontrola evidence ---------- */
+let chkYear=null;
+const CHECKS=[
+ ['doklady','Ke každému zápisu existuje fyzický pokladní doklad (příjmový / výdajový) se stejným číslem, datem, částkou, popisem a podpisem (§ 11 zákona o účetnictví).'],
+ ['trzby','Ke každé tržbě je doklad o tržbě z akce (souhrn za den/akci, kdo prodával, kdo peníze předal a převzal, podpisy).'],
+ ['nakupy','Nákupy zboží k prodeji (pivo, nápoje, občerstvení) mají účtenku nebo fakturu od dodavatele.'],
+ ['lih','Lihoviny nakupujeme jen od registrovaného distributora lihu, při nákupu sdělujeme, že jde o konečný prodej, a doklady o nákupu uchováváme (zákon č. 307/2013 Sb.).'],
+ ['baleni','V místě prodeje lihovin dodržujeme povolené velikosti otevřeného balení podle pravidel platných od 1. 7. 2025.'],
+ ['zastupce','Odpovědný zástupce pro hostinskou činnost je aktuální; změny se hlásí živnostenskému úřadu.'],
+ ['zalohy','Každá vydaná záloha je vyúčtovaná: doklady za utracené peníze jsou zapsané jako výdaj a nevyčerpaný zbytek jako vrácení zálohy.'],
+ ['pujcky','Půjčky a jejich splátky jsou vedené v knize pohledávek a závazků, ne jako běžný výdaj či příjem.'],
+ ['inventura','Revizor kontroluje pokladní hotovost (nejméně 4× ročně) a o kontrole je zápis se stavem hotovosti.'],
+ ['majetek','K 31. 12. proběhne inventarizace majetku a pokladní hotovosti.'],
+ ['archiv','Doklady a knihy se archivují nejméně 5 let po skončení roku.']];
+function renderCheck(){
+  const el=$('tabCheck'); const ys=years(); if(!chkYear||!ys.includes(chkYear))chkYear=ys.includes('2026')?'2026':ys[0];
+  const all=[...PK.entries].sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.created||0)-(b.created||0));
+  const E=all.filter(e=>(e.date||'').startsWith(chkYear));
+  const issues=[]; const add=(lvl,title,why,list)=>{if(list.length)issues.push({lvl,title,why,list})};
+  const short=t=>(t||'').replace(/ ?\(Trénink mládež[^)]*\)/,' (…)');
+  // 1 duplicitní čísla
+  const byDoc={}; E.forEach(e=>{if(e.doc){(byDoc[e.doc]=byDoc[e.doc]||[]).push(e)}});
+  add('err','Stejné číslo dokladu u více zápisů','Každý doklad musí mít jedinečné číslo, jinak nejde dohledat, ke kterému papíru zápis patří.',Object.values(byDoc).filter(a=>a.length>1).flat());
+  // 2 prefix
+  add('err','Číslo dokladu neodpovídá typu','Příjmy mají mít číslo P-…, výdaje V-…. Opravte číslo nebo typ zápisu podle fyzického dokladu.',E.filter(e=>e.doc&&((e.type==='in'&&!/^P/i.test(e.doc))||(e.type==='out'&&!/^V/i.test(e.doc)))));
+  // 3 bez čísla
+  add('err','Zápis bez čísla dokladu','Bez čísla nelze zápis spárovat s fyzickým dokladem.',E.filter(e=>!e.doc));
+  // 4 nulové
+  add('warn','Nulová částka','Zápis bez částky nepatří do peněžního deníku. Pokud jde jen o poznámku, smažte ho; pokud se platilo, doplňte částku.',E.filter(e=>!e.amount));
+  // 5 bez kategorie
+  add('warn','Zápis bez kategorie','Peněžní deník má příjmy a výdaje členit podle druhu (vyhláška č. 325/2015 Sb.). Kategorie se navíc používá pro výpočet daně a majetku.',E.filter(e=>!e.cat));
+  // 6 tržba mimo kategorii Tržba
+  add('warn','Tržba vedená v jiné kategorii','Text zápisu mluví o tržbě, ale kategorie není Tržba. Tržby z hostinské činnosti a prodeje patří do vedlejší činnosti, kategorie musí sedět.',E.filter(e=>/tržb|trzb/i.test(short(e.text))&&e.type==='in'&&e.cat!=='Tržba'&&e.cat!=='Pivo'));
+  // 7 půjčky / vyrovnání
+  add('warn','Půjčka, vyrovnání nebo převod peněz','Splátky půjček a přesuny peněz nejsou příjmem ani výdajem spolku. Patří do knihy pohledávek a závazků, případně mezi průběžné položky (kategorie Zálohy), a musí k nim být doklad.',E.filter(e=>/půjč|pujc|vyrovn|stará pokladn|staré pokladn|kasírk|kasirk/i.test(e.text)&&e.cat!=='Zálohy'));
+  // 8 stručný popis
+  add('info','Velmi stručný popis','Z popisu musí být jasné, co se platilo nebo za co se přijalo (např. „Pizza – občerstvení na brigádu 10. 7.“).',E.filter(e=>short(e.text).replace(/ \(…\).*/,'').trim().length<9));
+  // 9 pořadí čísel
+  const ord=[];['in','out'].forEach(t=>{let last=0,lastE=null;E.filter(e=>e.type===t).forEach(e=>{const m=/^[PV]-(\d+)\//i.exec(e.doc||'');if(m){const n=+m[1];if(n<last)ord.push(e);last=Math.max(last,n)}})});
+  add('info','Čísla dokladů nejdou podle data','Doklady se číslují vzestupně v pořadí, jak vznikly. Zkontrolujte datum nebo číslo podle papírového dokladu.',ord);
+  // 10 záporný zůstatek
+  let bal=+PK.settings.opening||0; const neg=[]; all.forEach(e=>{bal+=e.type==='in'?e.amount:-e.amount; if(bal<0&&(e.date||'').startsWith(chkYear))neg.push(e)});
+  add('err','Záporný stav pokladny','V pokladně nemůže být méně než nula. Chybí příjem, nebo je výdaj zapsaný dřív, než proběhl.',neg);
+  // 11 hotovostní limit
+  add('err','Platba nad 270 000 Kč v hotovosti','Zákon č. 254/2004 Sb. nedovoluje takovou platbu v hotovosti.',E.filter(e=>e.amount>270000));
+  // souhrny
+  const zal=E.filter(e=>e.cat==='Zálohy'); const zOut=zal.filter(e=>e.type==='out').reduce((s,e)=>s+e.amount,0), zIn=zal.filter(e=>e.type==='in').reduce((s,e)=>s+e.amount,0);
+  const taxable=E.filter(e=>e.type==='in'&&groupOf(e.cat||'')==='zd').reduce((s,e)=>s+e.amount,0);
+  const incAll=E.filter(e=>e.type==='in'&&groupOf(e.cat||'')!=='pr').reduce((s,e)=>s+e.amount,0);
+  const nErr=issues.filter(i=>i.lvl==='err').reduce((s,i)=>s+i.list.length,0), nWarn=issues.filter(i=>i.lvl!=='err').reduce((s,i)=>s+i.list.length,0);
+  const checks=PK.settings.checks||{};
+  const rowsOf=list=>list.map(e=>`<tr><td class="nw">${czDate(e.date)}</td><td class="nw">${esc(e.doc||'—')}</td><td>${esc(short(e.text))}${e.cat?`<span class="catlbl">${esc(e.cat)}</span>`:''}</td><td class="n ${e.type==='in'?'in':'out'}" style="color:var(--${e.type==='in'?'inc':'exp'})">${e.type==='in'?'+':'−'}${money(e.amount)}</td>${isOwner()?`<td class="nw"><button data-fix="${e.id}">Upravit</button></td>`:''}</tr>`).join('');
+  el.innerHTML=`<h2>Kontrola evidence</h2>
+  <p class="lead">Automatická kontrola zápisů s ohledem na jednoduché účetnictví a aktivní živnosti sboru (hostinská činnost, prodej lihovin, maloobchod). Spouští se znovu při každé změně v knize.</p>
+  <div class="yrsel">${yearSel('chkYearSel',chkYear)}</div>
+  <div class="dp-head">
+    <div><div class="l">Zápisů v roce ${chkYear}</div><div class="v">${E.length}</div></div>
+    <div><div class="l">Chyby k opravě</div><div class="v" style="color:var(--${nErr?'exp':'inc'})">${nErr}</div></div>
+    <div><div class="l">Upozornění</div><div class="v">${nWarn}</div></div>
+    <div><div class="l">Zdaňované příjmy / limit DPH 2 000 000 Kč</div><div class="v">${money(taxable)} ${taxable<2000000?'✓':'⚠'}</div></div>
+    <div><div class="l">Příjmy celkem / limit jednoduchého účetnictví 3 000 000 Kč</div><div class="v">${money(incAll)} ${incAll<=3000000?'✓':'⚠'}</div></div>
+    <div><div class="l">Zálohy vydané / vrácené</div><div class="v">${money(zOut)} / ${money(zIn)}</div></div>
+  </div>
+  ${!issues.length?'<div class="okbox"><b>Bez nálezů.</b> Zápisy v tomto roce nemají žádný z kontrolovaných problémů.</div>':''}
+  ${issues.map(i=>`<div class="law"><h4 style="color:var(--${i.lvl==='err'?'exp':i.lvl==='warn'?'ink':'muted'})">${i.lvl==='err'?'Chyba':i.lvl==='warn'?'Upozornění':'Doporučení'}: ${esc(i.title)} (${i.list.length})</h4><p style="margin:4px 0 10px;font-size:14px;color:var(--muted)">${i.why}</p><div class="xbox"><table class="astable" style="min-width:600px"><tbody>${rowsOf(i.list)}</tbody></table></div></div>`).join('')}
+  <h3>Kontrolní seznam dokladů a povinností</h3>
+  <p class="lead">Body, které aplikace z dat ověřit nemůže. ${isOwner()?'Odškrtnuté body se uloží.':'Odškrtává správce.'}</p>
+  <div class="law"><ul style="list-style:none;padding-left:0">${CHECKS.map(([k,t])=>`<li style="margin:8px 0;display:flex;gap:10px;align-items:flex-start"><input type="checkbox" data-chk="${k}" ${checks[k]?'checked':''} ${isOwner()?'':'disabled'} style="width:auto;margin-top:3px"><span>${t}</span></li>`).join('')}</ul></div>
+  <p class="note">Kontrola je pomůcka, nenahrazuje revizora ani daňového poradce.</p>`;
+  $('chkYearSel').onchange=e=>{chkYear=e.target.value;renderCheck()};
+  el.querySelectorAll('[data-fix]').forEach(b=>b.onclick=()=>{
+    setTab('book'); const all=document.querySelector('#viewTabs button[data-v="all"]'); if(all)all.click();
+    const per=document.getElementById('period'); if(per&&per.value!=='all'){per.value='all';per.dispatchEvent(new Event('change'))}
+    setTimeout(()=>{const x=document.querySelector('#rows [data-edit="'+b.dataset.fix+'"]'); if(x)x.click()},60);
+  });
+  el.querySelectorAll('[data-chk]').forEach(c=>c.onchange=()=>{const m=Object.assign({},PK.settings.checks||{});m[c.dataset.chk]=c.checked;PK.saveSettings({checks:m})});
+}
+
 /* ---------- zákony a předpisy ---------- */
 function lawsHTML(){
   const L=(title,url,items)=>`<div class="law"><h4><a href="${url}" target="_blank" rel="noopener">${title}</a></h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
@@ -301,5 +380,5 @@ function lawsHTML(){
 }
 
 /* ---------- start ---------- */
-const h0=(location.hash||'').slice(1); setTab(['laws','tax','assets','reg'].includes(h0)?h0:'book');
+const h0=(location.hash||'').slice(1); setTab(['laws','tax','assets','reg','check'].includes(h0)?h0:'book');
 })();
