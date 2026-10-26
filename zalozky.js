@@ -75,7 +75,6 @@ function setTab(t){
 }
 tabs.forEach(b=>b.onclick=()=>setTab(b.dataset.t));
 PK.onRender=()=>{if(tab==='tax')renderTax(); if(tab==='assets')renderAssets()};
-const h=(location.hash||'').slice(1); setTab(['laws','tax','assets'].includes(h)?h:'book');
 
 /* ---------- pomocné ---------- */
 const years=()=>{const s=new Set(PK.entries.map(e=>(e.date||'').slice(0,4)).filter(Boolean));s.add(String(new Date().getFullYear()));return [...s].sort().reverse()};
@@ -230,4 +229,7 @@ function lawsHTML(){
     'Metodický pokyn ÚKRR č. 1/2017 – revizor sboru kontroluje hospodaření včetně pokladní hotovosti nejméně 4× ročně.'])}
   <p class="note">Přehled je informativní a nenahrazuje právní ani daňové poradenství. Při nejasnostech se obraťte na okresní sdružení hasičů nebo daňového poradce.</p>`;
 }
+
+/* ---------- start ---------- */
+const h0=(location.hash||'').slice(1); setTab(['laws','tax','assets'].includes(h0)?h0:'book');
 })();
