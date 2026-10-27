@@ -367,10 +367,10 @@ function renderDebts(){
       <td class="nw">${d.date?czDate(d.date):'<span style="color:var(--exp)">doplnit</span>'}</td><td class="nw">${d.due?czDate(d.due):'—'}</td>
       <td class="n">${money(d.amount)}</td><td class="n">${money(c.paid)}</td><td class="n"><b>${money(c.rest)}</b></td>
       <td class="nw"><span class="pill ${c.state==='Uhrazeno'?'drm':'dhm'}">${c.state}</span></td>
-      ${isOwner()?`<td class="nw"><button data-dedit="${d.id}">Upravit</button><button data-ddel="${d.id}" style="color:var(--exp)">Smazat</button></td>`:''}</tr>`}).join('');
+      <td class="nw"><button data-dpdf="${d.id}">Smlouva PDF</button>${isOwner()?`<button data-dedit="${d.id}">Upravit</button><button data-ddel="${d.id}" style="color:var(--exp)">Smazat</button>`:''}</td></tr>`}).join('');
     const open=L.reduce((s,d)=>s+debtCalc(d).rest,0);
     return `<h3>${kind==='z'?'Závazky – co sbor dluží':'Pohledávky – co dluží sboru'}</h3>
-    <div class="xbox"><table class="astable"><thead><tr><th>${kind==='z'?'Věřitel':'Dlužník'} / předmět</th><th>Vznik</th><th>Splatnost</th><th style="text-align:right">Částka</th><th style="text-align:right">Uhrazeno</th><th style="text-align:right">Zbývá</th><th>Stav</th>${isOwner()?'<th></th>':''}</tr></thead>
+    <div class="xbox"><table class="astable"><thead><tr><th>${kind==='z'?'Věřitel':'Dlužník'} / předmět</th><th>Vznik</th><th>Splatnost</th><th style="text-align:right">Částka</th><th style="text-align:right">Uhrazeno</th><th style="text-align:right">Zbývá</th><th>Stav</th><th></th></tr></thead>
     <tbody>${rows||`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">Žádné ${kind==='z'?'závazky':'pohledávky'}.</td></tr>`}</tbody></table></div>
     <p class="note">Neuhrazeno celkem: <b>${money(open)}</b></p>`;
   };
@@ -397,7 +397,12 @@ function renderDebts(){
   }
   el.innerHTML=`<h2>Závazky a pohledávky</h2>
   <p class="lead">Kniha pohledávek a závazků podle § 13b zákona o účetnictví. Patří sem půjčky, nezaplacené faktury a peníze, které sbor někomu dluží nebo které dluží někdo sboru. Splátky a přijetí půjček se v pokladní knize vedou v kategorii Zálohy, aby se nezapočítaly do příjmů a výdajů.</p>
+  <div class="actions" style="margin:0 0 6px"><button class="btn primary" type="button" id="zpPdf">Vytisknout knihu (PDF)</button><button class="btn" type="button" id="zpShare">Odeslat</button><button class="btn" type="button" id="loanBlank">Prázdná smlouva o zápůjčce</button></div>
   ${part('z')}${part('p')}${form}`;
+  $('zpPdf').onclick=e=>runPdf(docZP,'kniha-pohledavek-a-zavazku.pdf','download',e.currentTarget,'Kniha pohledávek a závazků');
+  $('zpShare').onclick=e=>runPdf(docZP,'kniha-pohledavek-a-zavazku.pdf','share',e.currentTarget,'Kniha pohledávek a závazků');
+  $('loanBlank').onclick=e=>runPdf(()=>docLoan(''),'smlouva-o-zapujcce.pdf','download',e.currentTarget,'Smlouva o zápůjčce');
+  el.querySelectorAll('[data-dpdf]').forEach(b=>b.onclick=()=>runPdf(()=>docLoan(b.dataset.dpdf),'smlouva-o-zapujcce-'+b.dataset.dpdf+'.pdf','download',b,'Smlouva o zápůjčce'));
   el.querySelectorAll('[data-dedit]').forEach(b=>b.onclick=()=>{debtEdit=JSON.parse(JSON.stringify(debtsAll().find(x=>x.id===b.dataset.dedit)));renderDebts();$('debtForm').scrollIntoView({behavior:'smooth'})});
   el.querySelectorAll('[data-ddel]').forEach(b=>b.onclick=()=>{const d=debtsAll().find(x=>x.id===b.dataset.ddel);if(d&&confirm('Smazat záznam „'+(d.party||'')+' – '+(d.title||'')+'“?'))saveDebts(debtsAll().filter(x=>x.id!==d.id))});
   const sv=$('dSave'); if(sv)sv.onclick=()=>{
@@ -426,8 +431,8 @@ let regMini=null;
 async function orgInfo(){
   const s=PK.settings, ico=String(s.ico||'').replace(/\D/g,'');
   if(!regMini&&ico){try{const v=await (await fetch(ARES+'ekonomicke-subjekty-vr/'+ico)).json();const z=(v.zaznamy||[])[0]||{};const sz=(z.spisovaZnacka||[]).filter(x=>!x.datumVymazu)[0]||(z.spisovaZnacka||[])[0];
-    regMini={spis:sz?(sz.oddil+' '+sz.vlozka+' vedená u '+(SOUD[sz.soud]||sz.soud)):'',ucel:((z.cinnosti&&z.cinnosti.ucel)||[]).filter(x=>!x.datumVymazu).map(x=>x.hodnota.split('\n')[0]).join(' ').slice(0,160)}}catch(e){regMini={}}}
-  return {name:s.firm||'',ico:s.ico||'',addr:s.address||'',keeper:s.keeper||'',spis:(regMini&&regMini.spis)||'',ucel:(regMini&&regMini.ucel)||''};
+    regMini={spis:sz?(sz.oddil+' '+sz.vlozka+' vedená u '+(SOUD[sz.soud]||sz.soud)):'',ucel:((z.cinnosti&&z.cinnosti.ucel)||[]).filter(x=>!x.datumVymazu).map(x=>x.hodnota.split('\n')[0]).join(' ').slice(0,160),stat:(z.statutarniOrgany||[]).filter(x=>!x.datumVymazu).flatMap(g=>(g.clenoveOrganu||[]).filter(c=>!c.datumVymazu).map(c=>nm(c.fyzickaOsoba)+((c.clenstvi&&c.clenstvi.funkce&&c.clenstvi.funkce.nazev)?' ('+c.clenstvi.funkce.nazev+')':'')))}}catch(e){regMini={}}}
+  return {name:s.firm||'',ico:s.ico||'',addr:s.address||'',keeper:s.keeper||'',spis:(regMini&&regMini.spis)||'',ucel:(regMini&&regMini.ucel)||'',stat:(regMini&&regMini.stat)||[]};
 }
 const ROWI=[['01','Prodej zboží'],['02','Prodej výrobků a služeb'],['03','Příjmy z veřejných sbírek'],['04','Přijaté peněžní dary mimo veřejné sbírky'],['05','Přijaté členské příspěvky'],['06','Dotace a příspěvky přijaté z veřejných rozpočtů'],['07','Ostatní'],['08','Průběžné položky'],['09','Kursové rozdíly']];
 const ROWO=[['01','Dlouhodobý nehmotný a hmotný majetek'],['02','Materiál'],['03','Zboží'],['04','Služby'],['05','Mzdy'],['06','Pojistné za zaměstnance a zaměstnavatele'],['07','Ostatní osobní výdaje'],['08','Ostatní'],['09','Průběžné položky'],['10','Kursové rozdíly']];
@@ -517,7 +522,8 @@ const FORMS=[['pv','Přehled o příjmech a výdajích','Výkaz pro finanční �
  ['mz','Přehled o majetku a závazcích','Povinný výkaz pro finanční úřad a sbírku listin. Hotovost, majetek a závazky k začátku a konci roku.',docMZ,true],
  ['km','Inventurní soupis majetku','Kniha majetku k inventuře k 31. 12. se sloupcem pro fyzickou kontrolu a podpisy komise.',docKM,true],
  ['rev','Zápis o kontrole pokladní hotovosti','Revize pokladny k podpisu revizorem. Stav podle knihy se doplní sám, skutečný stav se spočítá na místě.',docRev,false],
- ['tax','Podklad pro daňové přiznání (DPPO)','Vyplněné řádky přiznání k dani z příjmů pro přepis na portálu Moje daně.',docTax,true]];
+ ['tax','Podklad pro daňové přiznání (DPPO)','Vyplněné řádky přiznání k dani z příjmů pro přepis na portálu Moje daně.',docTax,true],
+ ['zp','Kniha pohledávek a závazků','Přehled půjček a dluhů sboru s úhradami, stav k dnešnímu dni (§ 13b zákona o účetnictví).',()=>docZP(),false]];
 async function makeForm(key,mode,btn){
   const f=FORMS.find(x=>x[0]===key); const lbl=btn.textContent; btn.disabled=true; btn.textContent='Připravuji…';
   try{await loadPdfX(); const dd=await f[3](formYear); const name=key+'-'+(f[4]?formYear:PK.today())+'-SDH.pdf';
@@ -538,13 +544,67 @@ function renderForms(){
   ${isOwner()?`<div class="f"><label for="bank0">Bankovní účet k 1. 1. ${formYear} (Kč)</label><input id="bank0" inputmode="decimal" value="${bank.start||''}" placeholder="0"></div><div class="f"><label for="bank1">Bankovní účet k 31. 12. ${formYear} (Kč)</label><input id="bank1" inputmode="decimal" value="${bank.end||''}" placeholder="0"></div><button class="btn" id="bankSave" type="button">Uložit</button>`:''}</div>
   ${FORMS.map(([k,t,d])=>`<div class="law" style="display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div style="flex:1;min-width:240px"><h4 style="margin-bottom:2px">${t}</h4><div style="font-size:14px;color:var(--muted)">${d}</div></div>
    <div class="actions" style="margin:0"><button class="btn" type="button" data-form="${k}" data-mode="view">Zobrazit</button><button class="btn primary" type="button" data-form="${k}" data-mode="download">Stáhnout PDF</button><button class="btn" type="button" data-form="${k}" data-mode="share">Odeslat</button></div></div>`).join('')}
+  <div class="law" style="display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div style="flex:1;min-width:240px"><h4 style="margin-bottom:2px">Smlouva o zápůjčce (půjčka)</h4><div style="font-size:14px;color:var(--muted)">Vyplní se podle záznamu v záložce Závazky a pohledávky, nebo prázdná k ručnímu vyplnění. Obsahuje i potvrzení o vrácení.</div>
+   <select id="loanSel" style="margin-top:8px;max-width:420px"><option value="">Prázdná smlouva</option>${debtsAll().map(d=>`<option value="${d.id}">${esc((d.kind==='z'?'Sbor si půjčil od: ':'Sbor půjčil: ')+(d.party||'')+' – '+PK.money(d.amount))}</option>`).join('')}</select></div>
+   <div class="actions" style="margin:0"><button class="btn" type="button" data-loan="view">Zobrazit</button><button class="btn primary" type="button" data-loan="download">Stáhnout PDF</button><button class="btn" type="button" data-loan="share">Odeslat</button></div></div>
   <div class="infobox"><b>DPH:</b> sbor není plátcem DPH, formulář k DPH se nepodává. Plátcem by se stal až při obratu nad 2 000 000 Kč za kalendářní rok (zdaňované příjmy ${formYear}: ${money(zd)}).</div>
   <div class="infobox"><b>Jak odeslat na finanční úřad:</b> přiznání k dani z příjmů se podává elektronicky přes portál <a href="https://www.mojedane.cz" target="_blank" rel="noopener">Moje daně</a> (přihlášení datovou schránkou sboru). Údaje z „Podkladu pro daňové přiznání“ přepíšete do formuláře a oba přehledy (o příjmech a výdajích, o majetku a závazcích) nahrajete jako přílohy v PDF. Přehledy se také ukládají do sbírky listin spolkového rejstříku. Zápis o revizi pokladny a inventurní soupis se nikam neposílají – podepsané se ukládají k účetnictví.</div>
   <p class="note">Výkazy jsou v tisících Kč podle vyhlášky č. 325/2015 Sb. Před podpisem je zkontrolujte; aplikace nenahrazuje účetní ani daňového poradce.</p>`;
   $('formYearSel').onchange=e=>{formYear=e.target.value;renderForms()};
   el.querySelectorAll('[data-form]').forEach(b=>b.onclick=()=>makeForm(b.dataset.form,b.dataset.mode,b));
+  el.querySelectorAll('[data-loan]').forEach(b=>b.onclick=()=>{const id=$('loanSel').value;runPdf(()=>docLoan(id),'smlouva-o-zapujcce'+(id?'-'+id:'')+'.pdf',b.dataset.loan,b,'Smlouva o zápůjčce')});
   const bs=$('bankSave'); if(bs)bs.onclick=()=>{const m=Object.assign({},PK.settings.bank||{});m[formYear]={start:parseFloat(String($('bank0').value).replace(',','.'))||0,end:parseFloat(String($('bank1').value).replace(',','.'))||0};PK.saveSettings({bank:m}).then(()=>toastX('Uloženo'))};
 }
+
+/* ---------- kniha závazků a pohledávek + smlouva o zápůjčce (PDF) ---------- */
+async function runPdf(build,name,mode,btn,title){
+  const lbl=btn.textContent; btn.disabled=true; btn.textContent='Připravuji…';
+  try{await loadPdfX(); const dd=await build(); const blob=await new Promise(ok=>pdfMake.createPdf(dd).getBlob(ok)); const file=new File([blob],name,{type:'application/pdf'});
+    if(mode==='share'&&navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title});return}catch(e){if(e&&e.name==='AbortError')return}}
+    if(mode==='view'){window.open(URL.createObjectURL(file),'_blank');return}
+    const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();a.remove();
+    if(mode==='share')toastX('Sdílení tu není dostupné, PDF se stáhlo.');
+  }catch(e){console.error(e);toastX('PDF se nepodařilo vytvořit.')}finally{btn.disabled=false;btn.textContent=lbl}
+}
+async function docZP(){const o=await orgInfo(); const t=PK.today(); const D=debtsAll();
+  const sec=kind=>{const L=D.filter(d=>d.kind===kind);
+    const body=[[H(kind==='z'?'Věřitel':'Dlužník'),H('Předmět / doklad'),H('Vznik'),H('Splatnost'),H('Částka'),H('Uhrazeno'),H('Zbývá'),H('Stav')]];
+    L.forEach(d=>{const c=debtCalc(d); const pays=c.links.map(l=>(l.role==='vznik'?'vznik ':'úhrada ')+(l.e.doc||'')+' '+czDate(l.e.date)+' '+kc(l.e.amount)).join('\n');
+      body.push([d.party||'',{text:[(d.title||''),d.docRef?'\nDoklad: '+d.docRef:'',pays?'\n'+pays:''].join(''),fontSize:8},d.date?czDate(d.date):'—',d.due?czDate(d.due):'—',R(kc(d.amount)),R(kc(c.paid)),R(kc(c.rest)),c.state])});
+    if(!L.length)body.push([{text:'Žádné záznamy',colSpan:8,alignment:'center',color:'#666'},'','','','','','','']);
+    const open=L.reduce((s,d)=>s+debtCalc(d).rest,0);
+    return [{text:kind==='z'?'Závazky – co sbor dluží':'Pohledávky – co dluží sboru',bold:true,fontSize:11,margin:[0,8,0,4]},tbl([90,'*',52,52,62,62,62,58],body),{text:'Neuhrazeno celkem: '+kc(open),alignment:'right',bold:true,margin:[0,4,0,0]}]};
+  return {pageSize:'A4',pageOrientation:'landscape',pageMargins:[30,30,30,34],defaultStyle:{fontSize:8.5},content:[...hdr(o,'Kniha pohledávek a závazků','§ 13b zákona č. 563/1991 Sb. · stav k '+czDate(t)),...sec('z'),...sec('p'),sign(['Sestavil (hospodář)','Kontroloval (revizor)','Starosta'])]};}
+function slovy(n){n=Math.round(n);if(!n)return 'nula';const j=['','jedna','dva','tři','čtyři','pět','šest','sedm','osm','devět','deset','jedenáct','dvanáct','třináct','čtrnáct','patnáct','šestnáct','sedmnáct','osmnáct','devatenáct'],d=['','','dvacet','třicet','čtyřicet','padesát','šedesát','sedmdesát','osmdesát','devadesát'],s=['','sto','dvě stě','tři sta','čtyři sta','pět set','šest set','sedm set','osm set','devět set'];
+  const do999=x=>{const h=Math.floor(x/100),r=x%100;return [s[h],r<20?j[r]:(d[Math.floor(r/10)]+(r%10?' '+j[r%10]:''))].filter(Boolean).join(' ')};
+  const mil=Math.floor(n/1e6),tis=Math.floor(n/1000)%1000,zb=n%1000; const p=[];
+  if(mil)p.push(mil===1?'jeden milion':(mil<5?do999(mil).replace(/^dva$/,'dva')+' miliony':do999(mil)+' milionů'));
+  if(tis)p.push(tis===1?'tisíc':(tis<5?do999(tis).replace(/dva$/,'dva')+' tisíce':do999(tis)+' tisíc'));
+  if(zb)p.push(do999(zb)); return p.join(' ').replace(/\s+/g,' ').trim()}
+async function docLoan(id){const o=await orgInfo(); const d=id?debtsAll().find(x=>x.id===id):null; const blank='______________________________';
+  const sbor=[{text:o.name||'SDH',bold:true},'IČO: '+(o.ico||''),'se sídlem: '+(o.addr||''),o.spis?'zapsaný ve spolkovém rejstříku pod sp. zn. '+o.spis:'',{text:'zastoupený: '+((o.stat&&o.stat.length)?o.stat.join(', '):blank),margin:[0,0,0,0]}];
+  const druha=[{text:(d&&d.party)||blank,bold:true},'datum narození / IČO: '+blank,'bydliště / sídlo: '+blank];
+  const sborZap=d&&d.kind==='p'; // pohledávka = sbor půjčuje
+  const zap=sborZap?sbor:druha, vyd=sborZap?druha:sbor;
+  const amt=d?kc(d.amount):blank, amtW=d?slovy(d.amount)+' korun českých':blank;
+  const pays=d?debtCalc(d).links:[];
+  const art=(n,t,paras)=>[{text:n+'\n'+t,bold:true,alignment:'center',margin:[0,10,0,4]},...paras.map(p=>({text:p,margin:[0,0,0,4],alignment:'justify'}))];
+  return {pageSize:'A4',pageMargins:[50,40,50,44],defaultStyle:{fontSize:10,lineHeight:1.15},content:[
+    {text:'SMLOUVA O ZÁPŮJČCE',fontSize:18,bold:true,alignment:'center'},
+    {text:'uzavřená podle § 2390 a násl. zákona č. 89/2012 Sb., občanský zákoník',alignment:'center',fontSize:9,margin:[0,2,0,14]},
+    {text:'Smluvní strany',bold:true,margin:[0,0,0,4]},
+    {columns:[{stack:[{text:'Zapůjčitel:',italics:true},...zap]},{stack:[{text:'Vydlužitel:',italics:true},...vyd]}],columnGap:24,fontSize:9.5},
+    ...art('I.','Předmět smlouvy',['1. Zapůjčitel přenechává vydlužiteli peněžní prostředky ve výši '+amt+' (slovy: '+amtW+') a vydlužitel se zavazuje vrátit zapůjčiteli peněžní prostředky téhož druhu a ve stejné výši za podmínek této smlouvy.','2. Účel zápůjčky: '+((d&&d.title)||blank)+'.']),
+    ...art('II.','Předání peněžních prostředků',['1. Peněžní prostředky byly / budou předány dne '+((d&&d.date)?czDate(d.date):'__________')+'  [  ] v hotovosti při podpisu této smlouvy   [  ] převodem na účet č. ____________________.','2. Při předání v hotovosti vydlužitel podpisem této smlouvy potvrzuje jejich převzetí. Na straně sboru se přijetí i vrácení zápůjčky zapisuje do pokladní knihy jako průběžná položka a do knihy pohledávek a závazků.']),
+    ...art('III.','Úrok',['1. Zápůjčka je bezúročná, pokud se strany písemně nedohodnou jinak.']),
+    ...art('IV.','Vrácení zápůjčky',['1. Vydlužitel vrátí zápůjčku nejpozději do '+((d&&d.due)?czDate(d.due):'__________')+'  [  ] jednorázově   [  ] ve splátkách: ________________________________.','2. Vrácení proběhne v hotovosti proti písemnému potvrzení nebo převodem na účet zapůjčitele. Vydlužitel je oprávněn zápůjčku vrátit i předčasně.']),
+    ...art('V.','Závěrečná ustanovení',['1. Práva a povinnosti neupravené touto smlouvou se řídí občanským zákoníkem.','2. Smlouva je vyhotovena ve dvou stejnopisech, každá strana obdrží jeden. Smlouva nabývá platnosti a účinnosti dnem podpisu oběma stranami.','3. Uzavření smlouvy na straně sboru schválil výbor SDH dne __________ (usnesení č. ______).','4. Strany prohlašují, že smlouvu uzavírají svobodně a vážně, přečetly ji a souhlasí s jejím obsahem.']),
+    {text:'V ________________ dne ______________',margin:[0,16,0,0]},
+    {columns:[{stack:[{text:' ',margin:[0,30,0,0]},{canvas:[{type:'line',x1:0,y1:0,x2:200,y2:0,lineWidth:0.6}]},{text:'Zapůjčitel',fontSize:9,margin:[0,3,0,0]}]},{stack:[{text:' ',margin:[0,30,0,0]},{canvas:[{type:'line',x1:0,y1:0,x2:200,y2:0,lineWidth:0.6}]},{text:'Vydlužitel',fontSize:9,margin:[0,3,0,0]}]}],columnGap:40,unbreakable:true},
+    {text:'Potvrzení o vrácení zápůjčky',bold:true,margin:[0,26,0,4],pageBreak:'before'},
+    tbl([90,'*',110,130],[[H('Datum'),H('Doklad v pokladní knize'),H('Vrácená částka'),H('Podpis zapůjčitele')]].concat(pays.filter(l=>l.role==='uhrada').map(l=>[czDate(l.e.date),l.e.doc||'',R(kc(l.e.amount)),' '])).concat([[' ',' ',' ',' '],[' ',' ',' ',' '],[' ',' ',' ',' ']])),
+    {text:'Zapůjčitel podpisem potvrzuje převzetí vrácené částky. Po úplném vrácení zápůjčky potvrzuje, že vůči vydlužiteli již nemá z této smlouvy žádné nároky.',fontSize:9,margin:[0,8,0,0]},
+    {text:'Pozn.: vzor smlouvy je pomůcka; u vyšších částek nebo zvláštních podmínek doporučujeme konzultaci s právníkem.',fontSize:8,color:'#666',margin:[0,14,0,0]}]};}
 
 /* ---------- zákony a předpisy ---------- */
 function lawsHTML(){
