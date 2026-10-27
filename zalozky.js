@@ -65,19 +65,20 @@ host.innerHTML=`
 <section class="xt" id="tabAssets" hidden></section>
 <section class="xt" id="tabReg" hidden></section>
 <section class="xt" id="tabCheck" hidden></section>
-<section class="xt" id="tabDebts" hidden></section>`;
+<section class="xt" id="tabDebts" hidden></section>
+<section class="xt" id="tabForms" hidden></section>`;
 $('tabLaws').innerHTML=lawsHTML();
 
 const tabs=[...document.querySelectorAll('#mainTabs button')];
 function setTab(t){
   tab=t; document.body.dataset.tab=t;
   tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
-  $('tabLaws').hidden=t!=='laws'; $('tabTax').hidden=t!=='tax'; $('tabAssets').hidden=t!=='assets'; $('tabReg').hidden=t!=='reg'; $('tabCheck').hidden=t!=='check'; $('tabDebts').hidden=t!=='debts';
-  if(t==='tax')renderTax(); if(t==='assets')renderAssets(); if(t==='reg')renderReg(); if(t==='check')renderCheck(); if(t==='debts')renderDebts();
+  $('tabLaws').hidden=t!=='laws'; $('tabTax').hidden=t!=='tax'; $('tabAssets').hidden=t!=='assets'; $('tabReg').hidden=t!=='reg'; $('tabCheck').hidden=t!=='check'; $('tabDebts').hidden=t!=='debts'; $('tabForms').hidden=t!=='forms';
+  if(t==='tax')renderTax(); if(t==='assets')renderAssets(); if(t==='reg')renderReg(); if(t==='check')renderCheck(); if(t==='debts')renderDebts(); if(t==='forms')renderForms();
   try{history.replaceState(null,'',t==='book'?location.pathname:'#'+t)}catch(e){}
 }
 tabs.forEach(b=>b.onclick=()=>setTab(b.dataset.t));
-PK.onRender=()=>{if(tab==='tax')renderTax(); if(tab==='assets')renderAssets(); if(tab==='reg'&&!reg&&!regLoading)renderReg(); if(tab==='check')renderCheck(); if(tab==='debts'&&!debtEdit)renderDebts()};
+PK.onRender=()=>{if(tab==='tax')renderTax(); if(tab==='assets')renderAssets(); if(tab==='reg'&&!reg&&!regLoading)renderReg(); if(tab==='check')renderCheck(); if(tab==='debts'&&!debtEdit)renderDebts(); if(tab==='forms')renderForms()};
 
 /* ---------- pomocné ---------- */
 const years=()=>{const s=new Set(PK.entries.map(e=>(e.date||'').slice(0,4)).filter(Boolean));s.add(String(new Date().getFullYear()));return [...s].sort().reverse()};
@@ -404,6 +405,141 @@ function renderDebts(){
 }
 function toastX(t){const el=document.getElementById('toast');if(!el)return alert(t);el.textContent=t;el.classList.add('on');setTimeout(()=>el.classList.remove('on'),2000)}
 
+/* ---------- formuláře ke stažení (PDF) ---------- */
+let formYear=null, pdfP=null;
+function loadPdfX(){if(window.pdfMake&&window.pdfMake.vfs)return Promise.resolve();if(pdfP)return pdfP;
+  const ls=src=>new Promise((ok,ko)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=ko;document.head.appendChild(s)});
+  pdfP=ls('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js').then(()=>ls('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js')).catch(e=>{pdfP=null;throw e});return pdfP}
+const kc=v=>money(v).replace(/\u202F/g,'\u00A0');
+const tis=v=>String(Math.round((v||0)/1000));
+function balanceAt(d){let b=+PK.settings.opening||0;PK.entries.forEach(e=>{if(e.date<=d)b+=e.type==='in'?e.amount:-e.amount});return b}
+function balanceBefore(d){let b=+PK.settings.opening||0;PK.entries.forEach(e=>{if(e.date<d)b+=e.type==='in'?e.amount:-e.amount});return b}
+function assetsAt(d){return PK.entries.filter(e=>e.type==='out'&&e.date<=d&&(e.asset===true||(e.asset!==false&&ASSET_CATS.includes(e.cat)&&e.amount>0)))}
+function debtOpenAt(x,d){const born=!x.date||x.date<=d; if(!born)return 0; const paid=(x.links||[]).filter(l=>l.role==='uhrada').map(l=>entryById(l.id)).filter(e=>e&&e.date<=d).reduce((s,e)=>s+e.amount,0); return Math.max(0,(+x.amount||0)-paid-(+x.paidOther||0))}
+let regMini=null;
+async function orgInfo(){
+  const s=PK.settings, ico=String(s.ico||'').replace(/\D/g,'');
+  if(!regMini&&ico){try{const v=await (await fetch(ARES+'ekonomicke-subjekty-vr/'+ico)).json();const z=(v.zaznamy||[])[0]||{};const sz=(z.spisovaZnacka||[]).filter(x=>!x.datumVymazu)[0]||(z.spisovaZnacka||[])[0];
+    regMini={spis:sz?(sz.oddil+' '+sz.vlozka+' vedená u '+(SOUD[sz.soud]||sz.soud)):'',ucel:((z.cinnosti&&z.cinnosti.ucel)||[]).filter(x=>!x.datumVymazu).map(x=>x.hodnota.split('\n')[0]).join(' ').slice(0,160)}}catch(e){regMini={}}}
+  return {name:s.firm||'',ico:s.ico||'',addr:s.address||'',keeper:s.keeper||'',spis:(regMini&&regMini.spis)||'',ucel:(regMini&&regMini.ucel)||''};
+}
+const ROWI=[['01','Prodej zboží'],['02','Prodej výrobků a služeb'],['03','Příjmy z veřejných sbírek'],['04','Přijaté peněžní dary mimo veřejné sbírky'],['05','Přijaté členské příspěvky'],['06','Dotace a příspěvky přijaté z veřejných rozpočtů'],['07','Ostatní'],['08','Průběžné položky'],['09','Kursové rozdíly']];
+const ROWO=[['01','Dlouhodobý nehmotný a hmotný majetek'],['02','Materiál'],['03','Zboží'],['04','Služby'],['05','Mzdy'],['06','Pojistné za zaměstnance a zaměstnavatele'],['07','Ostatní osobní výdaje'],['08','Ostatní'],['09','Průběžné položky'],['10','Kursové rozdíly']];
+function rowOf(e){const c=e.cat||'',g=groupOf(c);
+  if(g==='pr')return e.type==='in'?'08':'09';
+  if(e.type==='in'){if(c==='Tržba'||c==='Pivo'||c==='Nákupy občerstvení')return '01'; if(c==='Dary')return '04'; return '07'}
+  if((c==='Vybavení klubovna'||c==='Vybavení hasiči')||e.asset===true)return e.amount>40000?'01':'02';
+  if(c==='Pivo'||c==='Nákupy občerstvení')return '03'; if(c==='Tržba')return '03'; return '08';
+}
+function pvData(y){
+  const E=PK.entries.filter(e=>e.date.startsWith(y)); const I={},O={};
+  E.forEach(e=>{const r=rowOf(e),col=groupOf(e.cat||'')==='zd'?'h':'m',T=e.type==='in'?I:O;T[r]=T[r]||{m:0,h:0};T[r][col]+=e.amount});
+  return {I,O};
+}
+const hdr=(o,title,sub)=>[{columns:[{stack:[{text:title,fontSize:16,bold:true},{text:sub,fontSize:9,color:'#444',margin:[0,2,0,0]}]},{width:'auto',alignment:'right',fontSize:8.5,stack:['Účetní jednotka:',{text:o.name,bold:true},'IČO: '+o.ico,o.addr,o.spis?'Spolkový rejstřík: '+o.spis:'']}]},{canvas:[{type:'line',x1:0,y1:6,x2:531,y2:6,lineWidth:1.2}],margin:[0,0,0,10]}];
+const sign=(labels)=>({columns:labels.map(t=>({stack:[{text:' ',margin:[0,28,0,0]},{canvas:[{type:'line',x1:0,y1:0,x2:150,y2:0,lineWidth:0.6}]},{text:t,fontSize:8,margin:[0,3,0,0]}]})),columnGap:18,margin:[0,26,0,0],unbreakable:true});
+const tbl=(widths,body,hr)=>({table:{headerRows:hr||1,widths,body},layout:{hLineWidth:()=>0.5,vLineWidth:()=>0.5,hLineColor:()=>'#888',vLineColor:()=>'#888',paddingTop:()=>3,paddingBottom:()=>3}});
+const H=t=>({text:t,bold:true,fillColor:'#E9EEEC',fontSize:8.5});
+const R=t=>({text:t,alignment:'right'});
+async function docPV(y){const o=await orgInfo(),d=pvData(y);
+  const sumI=c=>ROWI.reduce((s,[k])=>s+((d.I[k]||{})[c]||0),0), sumO=c=>ROWO.reduce((s,[k])=>s+((d.O[k]||{})[c]||0),0);
+  const line=(k,t,T)=>{const v=T[k]||{m:0,h:0};return [k,t,R(tis(v.m)),R(tis(v.h)),R(tis(v.m+v.h))]};
+  const body=[[H(''),H('Položka'),H('Hlavní činnost'),H('Hospodářská činnost'),H('Celkem')],[{text:'A.',bold:true},{text:'Příjmy',bold:true},'','','']];
+  ROWI.forEach(([k,t])=>body.push(line(k,t,d.I)));
+  body.push([{text:'10',bold:true},{text:'Příjmy celkem',bold:true},R(tis(sumI('m'))),R(tis(sumI('h'))),R(tis(sumI('m')+sumI('h')))]);
+  body.push([{text:'B.',bold:true},{text:'Výdaje',bold:true},'','','']);
+  ROWO.forEach(([k,t])=>body.push(line(k,t,d.O)));
+  body.push([{text:'11',bold:true},{text:'Výdaje celkem',bold:true},R(tis(sumO('m'))),R(tis(sumO('h'))),R(tis(sumO('m')+sumO('h')))]);
+  body.push([{text:'99',bold:true},{text:'Rozdíl příjmů a výdajů',bold:true},R(tis(sumI('m')-sumO('m'))),R(tis(sumI('h')-sumO('h'))),R(tis(sumI('m')+sumI('h')-sumO('m')-sumO('h')))]);
+  return {pageSize:'A4',pageMargins:[32,32,32,36],defaultStyle:{fontSize:9},content:[...hdr(o,'Přehled o příjmech a výdajích','podle přílohy č. 1 vyhlášky č. 325/2015 Sb. · za účetní období 1. 1. – 31. 12. '+y+' · v tisících Kč'),
+    o.ucel?{text:'Účel: '+o.ucel,fontSize:8,margin:[0,0,0,8]}:'',tbl([22,'*',80,80,70],body),
+    {text:'Sestaveno dne: '+czDate(PK.today())+(y===String(new Date().getFullYear())?' (průběžný stav – účetní období ještě neskončilo)':''),fontSize:8.5,margin:[0,8,0,0]},
+    sign(['Podpisový záznam statutárního orgánu','Sestavil (hospodář)'])]};}
+async function docMZ(y){const o=await orgInfo(); const d0=y+'-01-01', d1=y+'-12-31'; const end=d1<PK.today()?d1:PK.today();
+  const bank=(PK.settings.bank||{})[y]||{};
+  const cash0=balanceBefore(d0), cash1=balanceAt(end);
+  const as0=assetsAt(String(+y-1)+'-12-31'), as1=assetsAt(end);
+  const dhm=a=>a.filter(e=>e.amount>40000).reduce((s,e)=>s+e.amount,0), ost=a=>a.filter(e=>e.amount<=40000).reduce((s,e)=>s+e.amount,0);
+  const D=PK.settings.debts||[]; const loan=x=>/půjč|pujc|úvěr|uver|zápůjč/i.test((x.title||'')+(x.note||''));
+  const dsum=(kind,isLoan,dt)=>D.filter(x=>x.kind===kind&&loan(x)===isLoan).reduce((s,x)=>s+debtOpenAt(x,dt),0);
+  const dPrev=String(+y-1)+'-12-31';
+  const A=[['01','Dlouhodobý nehmotný majetek',0,0],['02','Dlouhodobý hmotný majetek',dhm(as0),dhm(as1)],['03','Finanční majetek',0,0],['04','Peněžní prostředky v hotovosti a ceniny',cash0,cash1],['05','Peněžní prostředky na bankovních účtech',+bank.start||0,+bank.end||0],['06','Zásoby',0,0],['07','Pohledávky',dsum('p',false,dPrev),dsum('p',false,end)],['08','Úvěry a zápůjčky poskytnuté',dsum('p',true,dPrev),dsum('p',true,end)],['09','Ostatní majetek',ost(as0),ost(as1)]];
+  const B=[['01','Závazky',dsum('z',false,dPrev),dsum('z',false,end)],['02','Úvěry a zápůjčky přijaté',dsum('z',true,dPrev),dsum('z',true,end)]];
+  const sa0=A.reduce((s,r)=>s+r[2],0), sa1=A.reduce((s,r)=>s+r[3],0), sb0=B.reduce((s,r)=>s+r[2],0), sb1=B.reduce((s,r)=>s+r[3],0);
+  const body=[[H(''),H('Položka'),H('K prvnímu dni účetního období'),H('K poslednímu dni účetního období')],[{text:'A.',bold:true},{text:'Majetek',bold:true},'','']];
+  A.forEach(r=>body.push([r[0],r[1],R(tis(r[2])),R(tis(r[3]))]));
+  body.push([{text:'10',bold:true},{text:'Majetek celkem',bold:true},R(tis(sa0)),R(tis(sa1))],[{text:'B.',bold:true},{text:'Závazky',bold:true},'','']);
+  B.forEach(r=>body.push([r[0],r[1],R(tis(r[2])),R(tis(r[3]))]));
+  body.push([{text:'03',bold:true},{text:'Závazky celkem',bold:true},R(tis(sb0)),R(tis(sb1))],[{text:'99',bold:true},{text:'Rozdíl majetku a závazků',bold:true},R(tis(sa0-sb0)),R(tis(sa1-sb1))]);
+  return {pageSize:'A4',pageMargins:[32,32,32,36],defaultStyle:{fontSize:9},content:[...hdr(o,'Přehled o majetku a závazcích','podle přílohy č. 2 vyhlášky č. 325/2015 Sb. · k '+czDate(end)+' · v tisících Kč'),
+    o.ucel?{text:'Účel: '+o.ucel,fontSize:8,margin:[0,0,0,8]}:'',tbl([22,'*',110,110],body),
+    {text:'Hotovost k prvnímu dni: '+kc(cash0)+' · k poslednímu dni: '+kc(cash1)+'. Majetek v pořizovacích cenách podle knihy majetku (nad 40 000 Kč ř. 02, ostatní ř. 09). Bankovní účty podle zadání v aplikaci.',fontSize:8,margin:[0,8,0,0],color:'#444'},
+    {text:'Sestaveno dne: '+czDate(PK.today()),fontSize:8.5,margin:[0,6,0,0]},sign(['Podpisový záznam statutárního orgánu','Sestavil (hospodář)'])]};}
+async function docKM(y){const o=await orgInfo(); const end=(y+'-12-31')<PK.today()?y+'-12-31':PK.today(); const A=assetsAt(end).sort((a,b)=>a.date<b.date?-1:1);
+  const body=[[H('Inv. č.'),H('Datum pořízení'),H('Popis'),H('Doklad'),H('Cena'),H('Druh'),H('Skutečnost')]];
+  A.forEach((e,i)=>body.push(['M-'+String(i+1).padStart(3,'0'),czDate(e.date),(e.text||'').slice(0,70),e.doc||'',R(kc(e.amount)),e.amount>40000?'DHM':'drobný',' ']));
+  if(!A.length)body.push([{text:'Žádný majetek v evidenci',colSpan:7,alignment:'center'},'','','','','','']);
+  body.push([{text:'Celkem',colSpan:4,bold:true},'','','',R(kc(A.reduce((s,e)=>s+e.amount,0))),'','']);
+  return {pageSize:'A4',pageOrientation:'landscape',pageMargins:[30,30,30,34],defaultStyle:{fontSize:8.5},content:[...hdr(o,'Inventurní soupis majetku','pomocná kniha o ostatních složkách majetku (§ 13b zákona o účetnictví) · stav k '+czDate(end)),
+    tbl([44,58,'*',62,70,44,70],body),{text:'Sloupec „Skutečnost“ vyplní inventarizační komise při fyzické kontrole (ano / chybí / poškozeno).',fontSize:8,margin:[0,6,0,0],color:'#444'},
+    sign(['Předseda inventarizační komise','Člen komise','Hospodář'])]};}
+async function docRev(){const o=await orgInfo(); const t=PK.today(); const book=balanceAt(t);
+  const E=PK.entries.filter(e=>e.date<=t); const lastOf=ty=>{const L=E.filter(e=>e.type===ty).sort((a,b)=>a.date<b.date?1:a.date>b.date?-1:(b.created||0)-(a.created||0));return L[0]?L[0].doc+' ze dne '+czDate(L[0].date):'—'};
+  const den=[5000,2000,1000,500,200,100,50,20,10,5,2,1];
+  const body=[[H('Nominál'),H('Počet kusů'),H('Částka')]].concat(den.map(n=>[n.toLocaleString('cs-CZ')+' Kč',' ',' ']));
+  body.push([{text:'Skutečný stav celkem',bold:true,colSpan:2},'',' ']);
+  return {pageSize:'A4',pageMargins:[36,32,36,36],defaultStyle:{fontSize:9.5},content:[...hdr(o,'Zápis o kontrole pokladní hotovosti','revize pokladny sboru dobrovolných hasičů'),
+    {columns:[{stack:['Datum a čas kontroly: ____________________','Místo: ____________________']},{stack:[{text:['Stav podle pokladní knihy k '+czDate(t)+': ',{text:kc(book),bold:true}]},'Poslední příjmový doklad: '+lastOf('in'),'Poslední výdajový doklad: '+lastOf('out')]}],columnGap:20,margin:[0,0,0,12]},
+    {columns:[{width:260,...tbl([90,80,80],body)},{stack:[{text:'Výsledek',bold:true,margin:[0,0,0,6]},'Stav podle knihy: '+kc(book),'Skutečný stav: ____________________','Rozdíl (+ přebytek / − schodek): ____________',{text:'Kontrolované doklady (od – do): __________________________',margin:[0,10,0,0]},'Zápisy v knize odpovídají dokladům:  ano  /  ne',{text:'Zjištění a opatření:',margin:[0,10,0,2]},'_____________________________________________','_____________________________________________','_____________________________________________',{text:'Vyjádření pokladníka:',margin:[0,10,0,2]},'_____________________________________________','_____________________________________________']}],columnGap:22},
+    sign(['Revizor sboru','Pokladník / hospodář'+(o.keeper?' ('+o.keeper+')':''),'Starosta sboru (seznámen)']),
+    {text:'Revizor nesmí být členem výboru sboru. Kontrola se provádí nejméně 4× ročně; zápis se ukládá k pokladní knize.',fontSize:8,color:'#555',margin:[0,14,0,0]}]};}
+async function docTax(y){const o=await orgInfo(); const t=taxCalc(y);
+  const body=[[H('Řádek'),H('Položka'),H('Částka')]].concat(t.rows.map(r=>[r[0],r[1],R(r[2])]));
+  return {pageSize:'A4',pageMargins:[36,32,36,36],defaultStyle:{fontSize:9.5},content:[...hdr(o,'Podklad pro přiznání k dani z příjmů právnických osob','zdaňovací období '+y+' · tiskopis 25 5404 · veřejně prospěšný poplatník'),
+    tbl([44,'*',110],body),{text:t.note,fontSize:8.5,margin:[0,10,0,0]},
+    {text:'Přiznání se podává elektronicky (Moje daně / datová schránka) do '+deadline(y)+'. Přílohou je přehled o příjmech a výdajích a přehled o majetku a závazcích. Sbor není plátcem DPH, přiznání k DPH nepodává.',fontSize:8.5,margin:[0,6,0,0]},
+    sign(['Statutární orgán','Sestavil'])]};}
+function taxCalc(y){
+  const E=PK.entries.filter(e=>e.date.startsWith(y)); const g={zd:{i:0,o:0},hl:{i:0,o:0},os:{i:0,o:0},pr:{i:0,o:0}};
+  E.forEach(e=>{g[groupOf(e.cat||'')][e.type==='in'?'i':'o']+=e.amount});
+  const inc=g.zd.i+g.hl.i+g.os.i,out=g.zd.o+g.hl.o+g.os.o,r10=inc-out,hlLoss=g.hl.o>=g.hl.i,r40=(hlLoss?g.hl.o:0)+g.os.o,r101=hlLoss?g.hl.i:0,r110=g.os.i,r200=r10+r40-r101-r110,base=Math.max(0,r200);
+  const r251=base>0?Math.min(base,Math.max(Math.min(base*0.3,1000000),300000)):0,r270=Math.max(0,Math.floor((base-r251)/1000)*1000),r290=Math.round(r270*0.21);
+  return {rows:[['10','Rozdíl mezi příjmy a výdaji',kc(r10)],['40','Výdaje, které nejsou daňovými výdaji',kc(r40)],['101','Příjmy, které nejsou předmětem daně (§ 18a)',kc(r101)],['110','Příjmy osvobozené od daně',kc(r110)],['200','Základ daně / ztráta',kc(r200)],['251','Snížení základu daně podle § 20 odst. 7',kc(r251)],['270','Základ daně zaokrouhlený na tisíce dolů',kc(r270)],['280','Sazba daně','21 %'],['290','Daň',kc(r290)]],
+    note:'Zdaňovaná (hospodářská) činnost: příjmy '+kc(g.zd.i)+', výdaje '+kc(g.zd.o)+'. Hlavní činnost: příjmy '+kc(g.hl.i)+', výdaje '+kc(g.hl.o)+'. Průběžné položky se nezapočítávají. Čísla řádků ověřte s aktuálním vzorem tiskopisu.'};
+}
+const FORMS=[['pv','Přehled o příjmech a výdajích','Výkaz pro finanční úřad (příloha k přiznání) a do sbírky listin. Vyplní se sám z pokladní knihy.',docPV,true],
+ ['mz','Přehled o majetku a závazcích','Povinný výkaz pro finanční úřad a sbírku listin. Hotovost, majetek a závazky k začátku a konci roku.',docMZ,true],
+ ['km','Inventurní soupis majetku','Kniha majetku k inventuře k 31. 12. se sloupcem pro fyzickou kontrolu a podpisy komise.',docKM,true],
+ ['rev','Zápis o kontrole pokladní hotovosti','Revize pokladny k podpisu revizorem. Stav podle knihy se doplní sám, skutečný stav se spočítá na místě.',docRev,false],
+ ['tax','Podklad pro daňové přiznání (DPPO)','Vyplněné řádky přiznání k dani z příjmů pro přepis na portálu Moje daně.',docTax,true]];
+async function makeForm(key,mode,btn){
+  const f=FORMS.find(x=>x[0]===key); const lbl=btn.textContent; btn.disabled=true; btn.textContent='Připravuji…';
+  try{await loadPdfX(); const dd=await f[3](formYear); const name=key+'-'+(f[4]?formYear:PK.today())+'-SDH.pdf';
+    const blob=await new Promise(ok=>pdfMake.createPdf(dd).getBlob(ok)); const file=new File([blob],name,{type:'application/pdf'});
+    if(mode==='share'&&navigator.canShare&&navigator.canShare({files:[file]})){try{await navigator.share({files:[file],title:f[1],text:f[1]+' – '+(PK.settings.firm||'')});return}catch(e){if(e&&e.name==='AbortError')return}}
+    if(mode==='view'){window.open(URL.createObjectURL(file),'_blank');return}
+    const a=document.createElement('a');a.href=URL.createObjectURL(file);a.download=name;document.body.appendChild(a);a.click();a.remove();
+    if(mode==='share')toastX('Sdílení tu není dostupné, PDF se stáhlo – přiložte ho k e-mailu.');
+  }catch(e){console.error(e);toastX('PDF se nepodařilo vytvořit.')}finally{btn.disabled=false;btn.textContent=lbl}
+}
+function renderForms(){
+  const el=$('tabForms'); const ys=years(); if(!formYear||!ys.includes(formYear))formYear=ys.includes('2026')?'2026':ys[0];
+  const bank=((PK.settings.bank||{})[formYear])||{};
+  const zd=PK.entries.filter(e=>e.date.startsWith(formYear)&&e.type==='in'&&groupOf(e.cat||'')==='zd').reduce((s,e)=>s+e.amount,0);
+  el.innerHTML=`<h2>Formuláře ke stažení</h2>
+  <p class="lead">Všechny formuláře se vyplní samy z aktuálních dat v aplikaci. Stáhnete je jako PDF, na mobilu je můžete rovnou poslat (e-mail, WhatsApp, datová schránka přes aplikaci) tlačítkem Odeslat.</p>
+  <div class="yrsel">${yearSel('formYearSel',formYear)}
+  ${isOwner()?`<div class="f"><label for="bank0">Bankovní účet k 1. 1. ${formYear} (Kč)</label><input id="bank0" inputmode="decimal" value="${bank.start||''}" placeholder="0"></div><div class="f"><label for="bank1">Bankovní účet k 31. 12. ${formYear} (Kč)</label><input id="bank1" inputmode="decimal" value="${bank.end||''}" placeholder="0"></div><button class="btn" id="bankSave" type="button">Uložit</button>`:''}</div>
+  ${FORMS.map(([k,t,d])=>`<div class="law" style="display:flex;gap:14px;align-items:center;justify-content:space-between;flex-wrap:wrap"><div style="flex:1;min-width:240px"><h4 style="margin-bottom:2px">${t}</h4><div style="font-size:14px;color:var(--muted)">${d}</div></div>
+   <div class="actions" style="margin:0"><button class="btn" type="button" data-form="${k}" data-mode="view">Zobrazit</button><button class="btn primary" type="button" data-form="${k}" data-mode="download">Stáhnout PDF</button><button class="btn" type="button" data-form="${k}" data-mode="share">Odeslat</button></div></div>`).join('')}
+  <div class="infobox"><b>DPH:</b> sbor není plátcem DPH, formulář k DPH se nepodává. Plátcem by se stal až při obratu nad 2 000 000 Kč za kalendářní rok (zdaňované příjmy ${formYear}: ${money(zd)}).</div>
+  <div class="infobox"><b>Jak odeslat na finanční úřad:</b> přiznání k dani z příjmů se podává elektronicky přes portál <a href="https://www.mojedane.cz" target="_blank" rel="noopener">Moje daně</a> (přihlášení datovou schránkou sboru). Údaje z „Podkladu pro daňové přiznání“ přepíšete do formuláře a oba přehledy (o příjmech a výdajích, o majetku a závazcích) nahrajete jako přílohy v PDF. Přehledy se také ukládají do sbírky listin spolkového rejstříku. Zápis o revizi pokladny a inventurní soupis se nikam neposílají – podepsané se ukládají k účetnictví.</div>
+  <p class="note">Výkazy jsou v tisících Kč podle vyhlášky č. 325/2015 Sb. Před podpisem je zkontrolujte; aplikace nenahrazuje účetní ani daňového poradce.</p>`;
+  $('formYearSel').onchange=e=>{formYear=e.target.value;renderForms()};
+  el.querySelectorAll('[data-form]').forEach(b=>b.onclick=()=>makeForm(b.dataset.form,b.dataset.mode,b));
+  const bs=$('bankSave'); if(bs)bs.onclick=()=>{const m=Object.assign({},PK.settings.bank||{});m[formYear]={start:parseFloat(String($('bank0').value).replace(',','.'))||0,end:parseFloat(String($('bank1').value).replace(',','.'))||0};PK.saveSettings({bank:m}).then(()=>toastX('Uloženo'))};
+}
+
 /* ---------- zákony a předpisy ---------- */
 function lawsHTML(){
   const L=(title,url,items)=>`<div class="law"><h4><a href="${url}" target="_blank" rel="noopener">${title}</a></h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
@@ -449,5 +585,5 @@ function lawsHTML(){
 }
 
 /* ---------- start ---------- */
-const h0=(location.hash||'').slice(1); setTab(['laws','tax','assets','reg','check','debts'].includes(h0)?h0:'book');
+const h0=(location.hash||'').slice(1); setTab(['laws','tax','assets','reg','check','debts','forms'].includes(h0)?h0:'book');
 })();
