@@ -91,6 +91,7 @@ body[data-tab]:not([data-tab="book"]) .tab-book{display:none!important}
 .authbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between;background:var(--teal-soft);border-radius:10px;padding:10px 14px;margin-bottom:18px;font-size:14px}
 .authbar .who{color:var(--ink)}
 body.locked .gated{display:none!important}
+body.basic #mainTabs,body.basic #extraTabs{display:none!important}
 body.ro .owner-only{display:none!important}
 #gate{display:none}
 body.locked #gate{display:block}
@@ -466,19 +467,24 @@ const firebaseConfig={
 };
 const FB='https://www.gstatic.com/firebasejs/10.12.2/';
 const OWNER_EMAIL='michal.karmasin@gmail.com'; // jen tento účet může zapisovat
-const READER_USER='sdh vlkov'; // uživatelské jméno pro čtení (bez ohledu na velká písmena)
-const READER_EMAIL='sdhvlkov@pokladni-kniha-2a348.firebaseapp.com'; // interní účet ve Firebase
+// účty jen pro čtení: jméno (bez diakritiky, malými písmeny) -> interní účet ve Firebase; full = vidí i ostatní záložky
+const READERS={'sdh vlkov':{email:'sdhvlkov@pokladni-kniha-2a348.firebaseapp.com',name:'SDH Vlkov',full:false},'jan micka':{email:'janmicka@pokladni-kniha-2a348.firebaseapp.com',name:'Jan Míčka',full:true}};
+const normName=s=>String(s||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+const readerByEmail=em=>Object.values(READERS).find(r=>r.email===String(em||'').toLowerCase());
 function setRole(r,user){
   role=r;
   const b=document.body;
   b.classList.toggle('locked',r==='out'||r==='denied'||r==='init');
   b.classList.toggle('ro',r==='reader');
+  const rd=r==='reader'&&user?readerByEmail(user.email):null;
+  b.classList.toggle('basic',r==='reader'&&!(rd&&rd.full));
+  if(b.classList.contains('basic')){b.dataset.tab='book';const bb=document.querySelector('#mainTabs button[data-t="book"]');if(bb&&bb.getAttribute('aria-selected')!=='true')bb.click()}
   $('loginForm').hidden=r!=='out';
   $('logoutBtn').hidden=!(r==='owner'||r==='reader'||r==='denied');
   const em=user?(user.email||''):'';
   $('authText').innerHTML=
     r==='owner'?'Přihlášen: '+esc(em)+'<span class="badge">správce</span>':
-    r==='reader'?'Přihlášen: SDH Vlkov<span class="badge">jen čtení</span>':
+    r==='reader'?'Přihlášen: '+esc(rd?rd.name:em)+'<span class="badge">jen čtení</span>':
     r==='denied'?'Přihlášen: '+esc(em):
     r==='out'?'Nejste přihlášený.':
     r==='local'?'Online ukládání teď není dostupné. Zápisy se ukládají jen v tomto prohlížeči.':'Načítám přihlášení…';
@@ -505,11 +511,11 @@ async function initCloud(){
   };
   $('logoutBtn').onclick=async()=>{await AU.signOut(auth);toast('Odhlášeno')};
   const readerLogin=async()=>{
-    const name=$('lUser').value.trim().toLowerCase().replace(/\s+/g,' '), pass=$('lPass').value, msg=$('lMsg');
+    const name=normName($('lUser').value), pass=$('lPass').value, msg=$('lMsg');
     if(!name||!pass){msg.textContent='Vyplňte jméno i heslo.';return}
-    if(name!==READER_USER){msg.textContent='Nesprávné jméno nebo heslo.';return}
+    const acc=READERS[name]; if(!acc){msg.textContent='Nesprávné jméno nebo heslo.';return}
     msg.textContent='Přihlašuji…';
-    try{await AU.signInWithEmailAndPassword(auth,READER_EMAIL,pass);msg.textContent='';$('lPass').value=''}
+    try{await AU.signInWithEmailAndPassword(auth,acc.email,pass);msg.textContent='';$('lPass').value=''}
     catch(e){msg.textContent=e&&e.code==='auth/too-many-requests'?'Příliš mnoho pokusů. Zkuste to za pár minut.':'Nesprávné jméno nebo heslo.'}
   };
   $('lBtn').onclick=readerLogin;
