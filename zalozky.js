@@ -92,69 +92,113 @@ function deadline(y){ // 4 měsíce po konci roku – elektronicky; posun na pra
 }
 
 /* ---------- daňové přiznání ---------- */
+function dppo(y){
+  const E=PK.entries.filter(e=>(e.date||'').startsWith(y));
+  const cats={}; const g={zd:{i:0,o:0},hl:{i:0,o:0},os:{i:0,o:0},pr:{i:0,o:0}}; const big=[];
+  E.forEach(e=>{const c=e.cat||''; cats[c]=cats[c]||{i:0,o:0}; const k=e.type==='in'?'i':'o'; cats[c][k]+=e.amount; g[groupOf(c)][k]+=e.amount; if(e.amount>270000)big.push(e)});
+  const inc=g.zd.i+g.hl.i+g.os.i, out=g.zd.o+g.hl.o+g.os.o, hlLoss=g.hl.o>=g.hl.i;
+  const R={}; R[10]=Math.round(inc-out); R[40]=Math.round((hlLoss?g.hl.o:0)+g.os.o); R[70]=R[40];
+  R[101]=Math.round(hlLoss?g.hl.i:0); R[110]=Math.round(g.os.i); R[170]=R[101]+R[110];
+  R[200]=R[10]+R[70]-R[170]; R[220]=R[200]; const loss=R[220]<=0;
+  R[230]=0; R[250]=loss?0:R[220];
+  R[251]=loss?0:Math.round(Math.min(R[250],Math.max(Math.min(R[250]*0.3,1000000),300000)));
+  R[260]=0; R[270]=loss?0:Math.max(0,Math.floor((R[250]-R[251]-R[260])/1000)*1000);
+  R[280]=21; R[290]=Math.ceil(R[270]*0.21); R[300]=0; R[310]=R[290]; R[320]=0; R[330]=R[310]; R[340]=R[330]; R[360]=R[340];
+  const mustFile=g.zd.i>0||(!hlLoss&&g.hl.i>0);
+  return {E,cats,g,inc,out,hlLoss,R,loss,mustFile,big};
+}
+const DP_ROWS=[[10,'Výsledek hospodaření nebo rozdíl mezi příjmy a výdaji (+/−)','u jednoduchého účetnictví rozdíl příjmů a výdajů – položka 99 přehledu o příjmech a výdajích'],[20,'Částky neoprávněně zkracující příjmy a hodnota nepeněžních příjmů'],[30,'Částky upravující výsledek hospodaření podle § 23 odst. 3 písm. a) zákona'],[40,'Výdaje (náklady), které nelze zahrnout do výdajů vynaložených na dosažení, zajištění a udržení příjmů','výdaje hlavní činnosti, jejíž příjmy nejsou předmětem daně, a poskytnuté dary'],[50,'Rozdíl, o který účetní odpisy převyšují odpisy daňové'],[70,'Úhrn řádků 20 až 65'],[101,'Příjmy veřejně prospěšného poplatníka, které nejsou předmětem daně (§ 18a)','příjmy z hlavní činnosti, jsou-li výdaje na ni vyšší'],[110,'Příjmy osvobozené od daně, pokud jsou zahrnuty v ř. 10','přijaté dary a jiné bezúplatné příjmy (§ 19b)'],[170,'Úhrn řádků 100 až 165'],[200,'Základ daně před úpravou o část základu daně připadající na komplementáře (ř. 10 + ř. 70 − ř. 170)'],[220,'Základ daně nebo daňová ztráta (ř. 200 − ř. 201 − ř. 210)'],[230,'Odečet daňové ztráty'],[250,'Základ daně snížený o položky ř. 230 až 243'],[251,'Snížení základu daně podle § 20 odst. 7 zákona','veřejně prospěšný poplatník: 30 %, nejméně 300 000 Kč (max. do výše základu), nejvýše 1 000 000 Kč'],[260,'Odečet bezúplatných plnění (§ 20 odst. 8)'],[270,'Základ daně snížený o ř. 251 a 260 a zaokrouhlený na celé tisíce Kč dolů'],[280,'Sazba daně (%)'],[290,'Daň (ř. 270 × ř. 280 / 100)'],[300,'Slevy na dani'],[310,'Daň po uplatnění slev (ř. 290 − ř. 300)'],[320,'Zápočet daně zaplacené v zahraničí'],[330,'Daň upravená o zápočet (ř. 310 − ř. 320)'],[340,'Daň celkem (ř. 330 + ř. 335)'],[360,'Poslední známá daňová povinnost']];
+const fmtKc=v=>Number(v||0).toLocaleString('cs-CZ');
+function dpSettings(){const s=PK.settings.dppo||{}; const st=(regMini&&regMini.stat&&regMini.stat[0])||''; const m=/^(\S+)\s+(.+?)(?:\s*\((.+)\))?$/.exec(st)||[];
+  return {ufo:s.ufo||'460',pracufo:s.pracufo||'',jmeno:s.jmeno||m[1]||'',prijmeni:s.prijmeni||m[2]||'',postaveni:s.postaveni||(m[3]?m[3].replace(/ SDH$/,''):'starosta'),tel:s.tel||'',nace:s.nace||''}}
+function splitAddr(a){a=String(a||''); const psc=(a.match(/\b(\d{3})\s?(\d{2})\b/)||[]); const cp=(a.match(/č\.\s?p\.\s?(\d+)/i)||a.match(/\b(\d{1,4})\b(?=,)/)||[]); const obec=(a.split(',').pop()||'').replace(/\d{3}\s?\d{2}/,'').trim()||(a.split(/\s|,/)[0]||'');
+  return {psc:psc[1]?psc[1]+psc[2]:'',cp:cp[1]||'',obec}}
+function dpXml(y){const D=dppo(y),R=D.R,s=PK.settings,ds=dpSettings(),ad=splitAddr(s.address),ico=String(s.ico||'').replace(/\D/g,'');
+  const at=o=>Object.entries(o).filter(([k,v])=>v!==''&&v!==null&&v!==undefined).map(([k,v])=>` ${k}="${String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}"`).join('');
+  const D_={dokument:'DP9',k_uladis:'DPP',dapdpp_forma:'B',typ_dapdpp:'A',typ_zo:'A',typ_popldpp:'3',zdobd_od:'01.01.'+y,zdobd_do:'31.12.'+y,c_ufo_cil:ds.ufo,c_nace:ds.nace};
+  const P_={dic:ico,rod_c:ico,zkrobchjm:s.firm||'',naz_obce:ad.obec,c_pop:ad.cp,psc:ad.psc,k_stat:'CZ',c_pracufo:ds.pracufo,c_telef:ds.tel,opr_jmeno:ds.jmeno,opr_prijmeni:ds.prijmeni,opr_postaveni:ds.postaveni};
+  const O_={kc_ii10_10:R[10],kc_ii50_40:R[40],kc_ii80_70:R[70],kc_ii111_101:R[101],kc_ii120_110:R[110],kc_ii190_170:R[170],kc_ii200_200:R[200],kc_ii_220:R[220]};
+  if(!D.loss)Object.assign(O_,{kc_ii230_250:R[250],kc_ii231_251:R[251],kc_ii260_270:R[270],kc_ii270_280:R[280],kc_ii280_290:R[290],kc_ii300_310:R[310],kc_ii320_330:R[330]});
+  Object.assign(O_,{kc_ii_340:Math.max(0,R[340]),kc_ii_360:Math.max(0,R[360])});
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<Pisemnost nazevSW="Pokladni kniha SDH" verzeSW="1.0">\n<DPPDP9>\n<VetaD${at(D_)}/>\n<VetaP${at(P_)}/>\n<VetaO${at(O_)}/>\n</DPPDP9>\n</Pisemnost>\n`;}
+function downloadText(text,name,type){const f=new File([text],name,{type});const a=document.createElement('a');a.href=URL.createObjectURL(f);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),4000)}
 function renderTax(){
   const el=$('tabTax'); const ys=years(); if(!taxYear||!ys.includes(taxYear))taxYear=ys.includes('2026')?'2026':ys[0];
-  const E=PK.entries.filter(e=>(e.date||'').startsWith(taxYear));
-  const cats={}; const g={zd:{i:0,o:0},hl:{i:0,o:0},os:{i:0,o:0},pr:{i:0,o:0}};
-  let bigCash=[];
-  E.forEach(e=>{const c=e.cat||''; cats[c]=cats[c]||{i:0,o:0}; const k=e.type==='in'?'i':'o'; cats[c][k]+=e.amount; g[groupOf(c)][k]+=e.amount; if(e.amount>270000)bigCash.push(e)});
-  const inc=g.zd.i+g.hl.i+g.os.i, out=g.zd.o+g.hl.o+g.os.o;
-  const r10=inc-out;
-  const hlLoss=g.hl.o>=g.hl.i; // § 18a odst. 1 písm. a) – jen pokud jsou výdaje vyšší
-  const r40=(hlLoss?g.hl.o:0)+g.os.o;
-  const r101=hlLoss?g.hl.i:0;
-  const r110=g.os.i;
-  const r200=r10+r40-r101-r110;
-  const base=Math.max(0,r200);
-  const r251=base>0?Math.min(base,Math.max(Math.min(base*0.3,1000000),300000)):0;
-  const r270=Math.max(0,Math.floor((base-r251)/1000)*1000);
-  const r290=Math.round(r270*0.21);
-  const s=PK.settings, thisYear=String(new Date().getFullYear());
-  const mustFile=g.zd.i>0||(!hlLoss&&g.hl.i>0);
-  const row=(r,t,v,sub,cls)=>`<tr class="${cls||''}"><td class="r">${r}</td><td>${t}${sub?`<span class="sub">${sub}</span>`:''}</td><td class="v">${v}</td></tr>`;
-  const catRows=Object.keys(cats).sort((a,b)=>(CATS.indexOf(a)+99*(a===''))-(CATS.indexOf(b)+99*(b===''))).map(c=>{
-    const gv=groupOf(c);
+  const D=dppo(taxYear), R=D.R, s=PK.settings, ds=dpSettings(), thisYear=String(new Date().getFullYear()), ico=String(s.ico||'').replace(/\D/g,'');
+  const cell=(v)=>`<div class="dpv">${fmtKc(v)}</div>`;
+  const rowsHtml=DP_ROWS.map(([r,t,sub])=>{const v=R[r]===undefined?0:R[r]; const hl=[200,220,270,290,340].includes(r); const off=D.loss&&r>=230&&r<=330;
+    return `<tr class="${hl?'dphl':''}${off?' dpoff':''}"><td class="dpr">${r}</td><td>${t}${sub?`<span class="dps">${sub}</span>`:''}</td><td class="dpc">${off?'':(r===280?'<div class="dpv">21</div>':cell(v))}</td></tr>`}).join('');
+  const catRows=Object.keys(D.cats).sort((a,b)=>(CATS.indexOf(a)+99*(a===''))-(CATS.indexOf(b)+99*(b===''))).map(c=>{const gv=groupOf(c);
     const sel=isOwner()?`<select data-cat="${esc(c)}">${Object.entries(GROUPS).map(([k,v])=>`<option value="${k}" ${k===gv?'selected':''}>${v}</option>`).join('')}</select>`:esc(GROUPS[gv]);
-    return `<tr><td>${esc(c||'Bez kategorie')}</td><td class="n">${money(cats[c].i)}</td><td class="n">${money(cats[c].o)}</td><td>${sel}</td></tr>`}).join('');
-  el.innerHTML=`
-  <h2>Daňové přiznání k dani z příjmů právnických osob</h2>
-  <p class="lead">Živý náhled vyplněný podle pokladní knihy. Mění se automaticky s každým zápisem. Slouží jako podklad pro vyplnění oficiálního tiskopisu 25 5404 na portálu <a href="https://www.mojedane.cz" target="_blank" rel="noopener">Moje daně</a>, sám o sobě se nepodává.</p>
-  <div class="yrsel">${yearSel('taxYearSel',taxYear)}</div>
-  ${taxYear===thisYear?`<div class="infobox">Rok ${taxYear} ještě neskončil, čísla jsou průběžný odhad k ${czDate(PK.today())}.</div>`:''}
-  <div class="dp-head">
-    <div><div class="l">Poplatník</div><div class="v">${esc(s.firm||'—')}</div></div>
-    <div><div class="l">IČO</div><div class="v">${esc(s.ico||'—')}</div></div>
-    <div><div class="l">Sídlo</div><div class="v">${esc(s.address||'—')}</div></div>
-    <div><div class="l">Zdaňovací období</div><div class="v">1. 1. ${taxYear} – 31. 12. ${taxYear}</div></div>
-    <div><div class="l">Typ poplatníka</div><div class="v">Veřejně prospěšný poplatník (§ 17a)</div></div>
-    <div><div class="l">Lhůta pro podání (elektronicky)</div><div class="v">do ${deadline(taxYear)}</div></div>
+    return `<tr><td>${esc(c||'Bez kategorie')}</td><td class="n">${money(D.cats[c].i)}</td><td class="n">${money(D.cats[c].o)}</td><td>${sel}</td></tr>`}).join('');
+  if(!document.getElementById('dpCss')){const st=document.createElement('style');st.id='dpCss';st.textContent=`
+.dpform{background:#fff;color:#111;border:2px solid #222;max-width:900px;margin:8px 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:13px}
+.dpform .dph{display:grid;grid-template-columns:1fr auto;border-bottom:2px solid #222}
+.dpform .dph>div{padding:8px 10px}
+.dpform .dph .t{font-size:20px;font-weight:700;letter-spacing:.3px}
+.dpform .dph .k{border-left:2px solid #222;font-size:11px;text-align:right;white-space:nowrap}
+.dpform .box{border:1px solid #222;display:inline-block;padding:2px 8px;margin:2px 2px 0 0;font-family:'Courier New',monospace;font-weight:700;background:#fff}
+.dpform .sec{background:#dde3e6;font-weight:700;padding:5px 10px;border-top:1px solid #222;border-bottom:1px solid #222;text-transform:uppercase;font-size:12px}
+.dpform .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+.dpform .fld{padding:6px 10px;border-right:1px solid #999;border-bottom:1px solid #999}
+.dpform .fld .l{font-size:10.5px;color:#444}
+.dpform .fld .v{font-weight:700;font-family:'Courier New',monospace}
+.dpform table{width:100%;border-collapse:collapse;min-width:0}
+.dpform td{border-bottom:1px solid #999;padding:5px 8px;vertical-align:top}
+.dpform td.dpr{width:46px;text-align:center;font-weight:700;border-right:1px solid #999;background:#f2f4f5}
+.dpform td.dpc{width:170px;border-left:1px solid #999}
+.dpform .dpv{border:1px solid #222;padding:2px 6px;text-align:right;font-family:'Courier New',monospace;font-weight:700;background:#fff}
+.dpform .dps{display:block;font-size:11px;color:#555;margin-top:1px}
+.dpform tr.dphl td{background:#eef3ff}
+.dpform tr.dpoff td{color:#999}
+.dpform .foot{padding:8px 10px;font-size:11px;color:#333;border-top:2px solid #222}
+@media (prefers-color-scheme:dark){.dpform{box-shadow:0 0 0 1px #555}}`;document.head.appendChild(st)}
+  el.innerHTML=`<h2>Daňové přiznání k dani z příjmů právnických osob</h2>
+  <p class="lead">Živě vyplněný formulář podle pokladní knihy, rozložením odpovídající tiskopisu 25 5404 (II. oddíl). Stáhnete ho jako PDF k tisku nebo jako XML soubor pro elektronické podání přes EPO.</p>
+  <div class="yrsel">${yearSel('taxYearSel',taxYear)}
+   <div class="actions" style="margin:0"><button class="btn primary" type="button" id="dpPdf">Tisk / PDF</button><button class="btn primary" type="button" id="dpXml">Export XML pro EPO</button><a class="btn" href="https://www.mojedane.cz" target="_blank" rel="noopener">Otevřít Moje daně</a></div></div>
+  ${taxYear===thisYear?`<div class="infobox">Rok ${taxYear} ještě neskončil – formulář je průběžný stav k ${czDate(PK.today())}. Podává se až po skončení roku, do ${deadline(taxYear)}.</div>`:''}
+  ${D.mustFile?`<div class="warnbox"><b>Přiznání je potřeba podat.</b> Sbor má zdanitelné příjmy z vedlejší činnosti (tržby, prodej nápojů); výjimka podle § 38mb se nepoužije.</div>`:`<div class="okbox">Podle současného zařazení nemá sbor v roce ${taxYear} zdanitelné příjmy; přiznání podle § 38mb podávat nemusí.</div>`}
+  ${!D.hlLoss&&D.g.hl.i>0?`<div class="warnbox">Hlavní činnost je v zisku – její příjmy se podle § 18a zdaňují.</div>`:''}
+  <div class="dpform" id="dpForm">
+    <div class="dph"><div><div style="font-size:11px">Finančnímu úřadu pro <b>${ds.ufo==='460'?'Kraj Vysočina':'(kód '+esc(ds.ufo)+')'}</b></div><div class="t">PŘIZNÁNÍ</div><div style="font-weight:700">k dani z příjmů právnických osob</div>
+      <div style="margin-top:4px">za zdaňovací období od <span class="box">01.01.${taxYear}</span> do <span class="box">31.12.${taxYear}</span></div></div>
+      <div class="k">25 5404<br>MFin 5404<br><br>Daňové identifikační číslo<br><span class="box">CZ ${esc(ico)}</span><br>Typ přiznání: <span class="box">řádné</span> <span class="box">A</span><br>Typ poplatníka: <span class="box">3</span></div></div>
+    <div class="sec">I. oddíl – Údaje o poplatníkovi</div>
+    <div class="grid2">
+      <div class="fld"><div class="l">01 Název poplatníka</div><div class="v">${esc(s.firm||'')}</div></div>
+      <div class="fld"><div class="l">02 Identifikační číslo</div><div class="v">${esc(ico)}</div></div>
+      <div class="fld"><div class="l">Sídlo</div><div class="v">${esc(s.address||'')}</div></div>
+      <div class="fld"><div class="l">Typ poplatníka</div><div class="v">3 – veřejně prospěšný poplatník (§ 17a)</div></div>
+      <div class="fld"><div class="l">Účetnictví</div><div class="v">jednoduché (vyhl. č. 325/2015 Sb.)</div></div>
+      <div class="fld"><div class="l">Osoba oprávněná k podpisu</div><div class="v">${esc((ds.jmeno+' '+ds.prijmeni).trim()||'—')}${ds.postaveni?', '+esc(ds.postaveni):''}</div></div>
+    </div>
+    <div class="sec">II. oddíl – Daň z příjmů právnických osob</div>
+    <table><tbody>${rowsHtml}</tbody></table>
+    <div class="foot">Přílohy: Přehled o příjmech a výdajích a Přehled o majetku a závazcích (příloha č. 1 a 2 vyhlášky č. 325/2015 Sb.) – v EPO se vyplní jako elektronické přílohy, podklady jsou v záložce Formuláře. Daň je zaokrouhlena na celé koruny nahoru.</div>
   </div>
-  ${mustFile?`<div class="warnbox"><b>Přiznání je potřeba podat.</b> Sbor má zdanitelné příjmy z vedlejší činnosti (tržby, prodej piva), proto se na něj nevztahuje výjimka podle § 38mb ZDP. Podává se elektronicky, právnická osoba má datovou schránku.</div>`
-    :`<div class="okbox">Podle současného zařazení nemá sbor v roce ${taxYear} zdanitelné příjmy. Pokud to platí i ke konci roku, přiznání podle § 38mb ZDP podávat nemusí a nemusí to ani oznamovat.</div>`}
-  ${!hlLoss&&g.hl.i>0?`<div class="warnbox">Hlavní činnost je v zisku (příjmy ${money(g.hl.i)} &gt; výdaje ${money(g.hl.o)}). Podle § 18a odst. 1 písm. a) ZDP pak její příjmy nejsou vyňaty a zdaňují se.</div>`:''}
-  ${bigCash.length?`<div class="warnbox">Pozor: ${bigCash.length} zápis(y) převyšují limit platby v hotovosti 270 000 Kč (zákon č. 254/2004 Sb.).</div>`:''}
-  ${inc>3000000?`<div class="warnbox">Příjmy přesáhly 3 000 000 Kč – od dalšího roku nelze vést jednoduché účetnictví (§ 1f zákona o účetnictví).</div>`:''}
-  <div class="xbox"><table class="form-dp">
-    <thead><tr><th>Řádek</th><th>Položka (II. oddíl – daň z příjmů právnických osob)</th><th style="text-align:right">Částka</th></tr></thead>
-    <tbody>
-    ${row('10','Rozdíl mezi příjmy a výdaji',money(r10),`Příjmy ${money(inc)} − výdaje ${money(out)} (bez průběžných položek – zálohy)`)}
-    ${row('40','Výdaje, které nejsou daňovými výdaji',money(r40),`Výdaje hlavní činnosti${hlLoss?'':' (nevyjímají se – hlavní činnost je v zisku)'} a poskytnuté dary (§ 25 ZDP)`)}
-    ${row('101','Příjmy, jež u veřejně prospěšných poplatníků nejsou předmětem daně (§ 18a)',money(r101),'Příjmy hlavní činnosti, pokud jsou její výdaje vyšší')}
-    ${row('110','Příjmy osvobozené od daně',money(r110),'Přijaté dary a jiné bezúplatné příjmy (§ 19b ZDP)')}
-    ${row('200','Základ daně / ztráta',money(r200),'ř. 10 + ř. 40 − ř. 101 − ř. 110','tot')}
-    ${row('251','Snížení základu daně podle § 20 odst. 7 ZDP',money(r251),'Až 30 % základu, nejméně 300 000 Kč (max. do výše základu), nejvýše 1 000 000 Kč. Ušetřenou daň je nutné použít na hlavní činnost.')}
-    ${row('270','Základ daně zaokrouhlený na celé tisíce Kč dolů',money(r270),'','tot')}
-    ${row('280','Sazba daně','21 %','§ 21 odst. 1 ZDP')}
-    ${row('290','Daň',money(r290),'','tot')}
-    </tbody></table></div>
-  <p class="note">Čísla řádků odpovídají tiskopisu 25 5404 platnému pro roky 2025–2026. Před podáním je porovnejte s aktuálním vzorem na portálu Moje daně. K přiznání se přikládá účetní závěrka (u jednoduchého účetnictví přehled o příjmech a výdajích a přehled o majetku a závazcích). Výpočet nenahrazuje daňového poradce.</p>
+  ${isOwner()?`<details class="law"><summary style="cursor:pointer;font-weight:600">Údaje pro elektronické podání (finanční úřad, podepisující osoba)</summary>
+   <div class="grid" style="margin-top:10px">
+    <div class="f s3"><label for="dpUfo">Kód finančního úřadu</label><input id="dpUfo" value="${esc(ds.ufo)}"></div>
+    <div class="f s3"><label for="dpPrac">Kód územního pracoviště (nepovinné)</label><input id="dpPrac" value="${esc(ds.pracufo)}"></div>
+    <div class="f s3"><label for="dpNace">CZ-NACE hlavní činnosti (nepovinné)</label><input id="dpNace" value="${esc(ds.nace)}"></div>
+    <div class="f s3"><label for="dpTel">Telefon (nepovinné)</label><input id="dpTel" value="${esc(ds.tel)}"></div>
+    <div class="f s4"><label for="dpJm">Jméno podepisující osoby</label><input id="dpJm" value="${esc(ds.jmeno)}"></div>
+    <div class="f s4"><label for="dpPr">Příjmení</label><input id="dpPr" value="${esc(ds.prijmeni)}"></div>
+    <div class="f s4"><label for="dpPost">Postavení (např. starosta)</label><input id="dpPost" value="${esc(ds.postaveni)}"></div>
+   </div><div class="actions"><button class="btn" type="button" id="dpSave">Uložit</button></div>
+   <p class="note">460 = Finanční úřad pro Kraj Vysočina. Územní pracoviště doplníte, pokud ho znáte; jinak ho vyberete v EPO.</p></details>`:''}
+  <div class="infobox"><b>Jak podat elektronicky:</b> 1) klikněte na <b>Export XML pro EPO</b>; 2) otevřete portál Moje daně → Elektronická podání (EPO) → <b>Načíst soubor</b> a vyberte stažený XML; 3) EPO formulář zkontroluje – doplňte případné chybějící údaje a v části přílohy vyplňte Přehled o příjmech a výdajích a Přehled o majetku a závazcích (čísla najdete v PDF v záložce Formuláře); 4) podejte přes datovou schránku sboru. XML odpovídá struktuře DPPDP9 zveřejněné Finanční správou; strukturu pro rok ${taxYear} Finanční správa každoročně aktualizuje, proto výsledek vždy zkontrolujte v EPO před odesláním.</div>
   <h3>Zařazení kategorií</h3>
-  <p class="lead">Podle zařazení se počítají řádky výše. ${isOwner()?'Zařazení můžete změnit, uloží se pro všechny.':'Zařazení nastavuje správce.'} Zápisy bez kategorie se počítají do hlavní činnosti, kategorii jim doplňte přes Upravit.</p>
-  <div class="xbox"><table class="mapt"><thead><tr><th>Kategorie</th><th style="text-align:right">Příjmy ${taxYear}</th><th style="text-align:right">Výdaje ${taxYear}</th><th>Zařazení pro daň</th></tr></thead><tbody>${catRows||'<tr><td colspan="4">Žádné zápisy</td></tr>'}</tbody></table></div>`;
+  <p class="lead">Podle zařazení se počítají řádky formuláře. ${isOwner()?'Zařazení můžete změnit, uloží se pro všechny.':'Zařazení nastavuje správce.'}</p>
+  <div class="xbox"><table class="mapt"><thead><tr><th>Kategorie</th><th style="text-align:right">Příjmy ${taxYear}</th><th style="text-align:right">Výdaje ${taxYear}</th><th>Zařazení pro daň</th></tr></thead><tbody>${catRows||'<tr><td colspan="4">Žádné zápisy</td></tr>'}</tbody></table></div>
+  <p class="note">Výpočet nenahrazuje daňového poradce. Čísla řádků a XML odpovídají struktuře DPPDP9 zveřejněné Finanční správou.</p>`;
   $('taxYearSel').onchange=e=>{taxYear=e.target.value;renderTax()};
-  el.querySelectorAll('select[data-cat]').forEach(sel=>sel.onchange=()=>{
-    const m=Object.assign({},PK.settings.taxMap||{}); m[sel.dataset.cat]=sel.value; PK.saveSettings({taxMap:m}).then(()=>renderTax());
-  });
+  el.querySelectorAll('select[data-cat]').forEach(sel=>sel.onchange=()=>{const m=Object.assign({},PK.settings.taxMap||{}); m[sel.dataset.cat]=sel.value; PK.saveSettings({taxMap:m}).then(()=>renderTax())});
+  $('dpPdf').onclick=e=>runPdf(()=>docTax(taxYear),'priznani-DPPO-'+taxYear+'.pdf','download',e.currentTarget,'Přiznání k dani z příjmů PO');
+  $('dpXml').onclick=()=>{orgInfo().then(()=>{downloadText(dpXml(taxYear),'DPPO_'+taxYear+'_'+ico+'.xml','application/xml');toastX('XML staženo – načtěte ho v EPO')})};
+  const sv=$('dpSave'); if(sv)sv.onclick=()=>PK.saveSettings({dppo:{ufo:$('dpUfo').value.trim(),pracufo:$('dpPrac').value.trim(),nace:$('dpNace').value.trim(),tel:$('dpTel').value.trim(),jmeno:$('dpJm').value.trim(),prijmeni:$('dpPr').value.trim(),postaveni:$('dpPost').value.trim()}}).then(()=>{toastX('Uloženo');renderTax()});
+  if(!regMini)orgInfo().then(()=>{if(tab==='tax'&&!(PK.settings.dppo&&PK.settings.dppo.jmeno))renderTax()});
 }
 
 /* ---------- majetek ---------- */
@@ -504,12 +548,18 @@ async function docRev(){const o=await orgInfo(); const t=PK.today(); const book=
     {columns:[{width:260,...tbl([90,80,80],body)},{stack:[{text:'Výsledek',bold:true,margin:[0,0,0,6]},'Stav podle knihy: '+kc(book),'Skutečný stav: ____________________','Rozdíl (+ přebytek / − schodek): ____________',{text:'Kontrolované doklady (od – do): __________________________',margin:[0,10,0,0]},'Zápisy v knize odpovídají dokladům:  ano  /  ne',{text:'Zjištění a opatření:',margin:[0,10,0,2]},'_____________________________________________','_____________________________________________','_____________________________________________',{text:'Vyjádření pokladníka:',margin:[0,10,0,2]},'_____________________________________________','_____________________________________________']}],columnGap:22},
     sign(['Revizor sboru','Pokladník / hospodář'+(o.keeper?' ('+o.keeper+')':''),'Starosta sboru (seznámen)']),
     {text:'Revizor nesmí být členem výboru sboru. Kontrola se provádí nejméně 4× ročně; zápis se ukládá k pokladní knize.',fontSize:8,color:'#555',margin:[0,14,0,0]}]};}
-async function docTax(y){const o=await orgInfo(); const t=taxCalc(y);
-  const body=[[H('Řádek'),H('Položka'),H('Částka')]].concat(t.rows.map(r=>[r[0],r[1],R(r[2])]));
-  return {pageSize:'A4',pageMargins:[36,32,36,36],defaultStyle:{fontSize:9.5},content:[...hdr(o,'Podklad pro přiznání k dani z příjmů právnických osob','zdaňovací období '+y+' · tiskopis 25 5404 · veřejně prospěšný poplatník'),
-    tbl([44,'*',110],body),{text:t.note,fontSize:8.5,margin:[0,10,0,0]},
-    {text:'Přiznání se podává elektronicky (Moje daně / datová schránka) do '+deadline(y)+'. Přílohou je přehled o příjmech a výdajích a přehled o majetku a závazcích. Sbor není plátcem DPH, přiznání k DPH nepodává.',fontSize:8.5,margin:[0,6,0,0]},
-    sign(['Statutární orgán','Sestavil'])]};}
+async function docTax(y){const o=await orgInfo(); const D=dppo(y),R=D.R,ds=dpSettings(),ico=String(o.ico||'').replace(/\D/g,'');
+  const box=t=>({text:' '+t+' ',bold:true,font:'Roboto',background:'#ffffff'});
+  const body=[[{text:'Ř.',bold:true,fillColor:'#dde3e6',alignment:'center'},{text:'II. ODDÍL – DAŇ Z PŘÍJMŮ PRÁVNICKÝCH OSOB',bold:true,fillColor:'#dde3e6'},{text:'Kč',bold:true,fillColor:'#dde3e6',alignment:'right'}]].concat(DP_ROWS.map(([r,t,sub])=>{const off=D.loss&&r>=230&&r<=330; const hl=[200,220,270,290,340].includes(r);
+    return [{text:String(r),bold:true,alignment:'center',fillColor:'#f2f4f5'},{stack:[{text:t,fontSize:8.5},sub?{text:sub,fontSize:7,color:'#555'}:'']},{text:off?'':(r===280?'21':fmtKc(R[r]||0)),alignment:'right',bold:true,fillColor:hl?'#eef3ff':null}]}));
+  return {pageSize:'A4',pageMargins:[30,28,30,34],defaultStyle:{fontSize:9},content:[
+    {table:{widths:['*',150],body:[[{stack:[{text:'Finančnímu úřadu pro '+(ds.ufo==='460'?'Kraj Vysočina':'(kód '+ds.ufo+')'),fontSize:8},{text:'PŘIZNÁNÍ',fontSize:20,bold:true,margin:[0,2,0,0]},{text:'k dani z příjmů právnických osob',bold:true},{text:'za zdaňovací období od 01.01.'+y+' do 31.12.'+y,margin:[0,4,0,0]}]},{stack:[{text:'25 5404 · MFin 5404',fontSize:7.5},{text:'Daňové identifikační číslo',fontSize:7.5,margin:[0,6,0,0]},{text:'CZ '+ico,bold:true,fontSize:12},{text:'Řádné přiznání · typ A · poplatník typu 3',fontSize:7.5,margin:[0,4,0,0]}],alignment:'right'}]]},layout:{hLineWidth:()=>1.5,vLineWidth:()=>1.5}},
+    {text:'I. ODDÍL – ÚDAJE O POPLATNÍKOVI',bold:true,fillColor:'#dde3e6',margin:[0,8,0,3]},
+    {table:{widths:['*','*'],body:[[{stack:[{text:'01 Název poplatníka',fontSize:7,color:'#444'},{text:o.name,bold:true}]},{stack:[{text:'02 Identifikační číslo',fontSize:7,color:'#444'},{text:ico,bold:true}]}],[{stack:[{text:'Sídlo',fontSize:7,color:'#444'},{text:o.addr,bold:true}]},{stack:[{text:'Typ poplatníka',fontSize:7,color:'#444'},{text:'3 – veřejně prospěšný poplatník (§ 17a)',bold:true}]}],[{stack:[{text:'Účetnictví',fontSize:7,color:'#444'},{text:'jednoduché (vyhláška č. 325/2015 Sb.)',bold:true}]},{stack:[{text:'Osoba oprávněná k podpisu',fontSize:7,color:'#444'},{text:((ds.jmeno+' '+ds.prijmeni).trim()||'—')+(ds.postaveni?', '+ds.postaveni:''),bold:true}]}]]},layout:{hLineWidth:()=>0.5,vLineWidth:()=>0.5,hLineColor:()=>'#888',vLineColor:()=>'#888'}},
+    {text:' ',margin:[0,4,0,0]},
+    {table:{headerRows:1,widths:[30,'*',100],body},layout:{hLineWidth:()=>0.5,vLineWidth:()=>0.5,hLineColor:()=>'#888',vLineColor:()=>'#888',paddingTop:()=>2.5,paddingBottom:()=>2.5}},
+    {text:'Přílohy: Přehled o příjmech a výdajích a Přehled o majetku a závazcích (příl. č. 1 a 2 vyhl. č. 325/2015 Sb.). Přiznání se podává elektronicky do '+deadline(y)+' (Moje daně / EPO, datová schránka). Tento výtisk je podklad vyplněný z pokladní knihy, nikoli úřední tiskopis.',fontSize:7.5,color:'#444',margin:[0,6,0,0]},
+    sign(['Datum','Podpis osoby oprávněné k podpisu'])]};}
 function taxCalc(y){
   const E=PK.entries.filter(e=>e.date.startsWith(y)); const g={zd:{i:0,o:0},hl:{i:0,o:0},os:{i:0,o:0},pr:{i:0,o:0}};
   E.forEach(e=>{g[groupOf(e.cat||'')][e.type==='in'?'i':'o']+=e.amount});
