@@ -64,19 +64,20 @@ host.innerHTML=`
 <section class="xt" id="tabTax" hidden></section>
 <section class="xt" id="tabAssets" hidden></section>
 <section class="xt" id="tabReg" hidden></section>
-<section class="xt" id="tabCheck" hidden></section>`;
+<section class="xt" id="tabCheck" hidden></section>
+<section class="xt" id="tabDebts" hidden></section>`;
 $('tabLaws').innerHTML=lawsHTML();
 
 const tabs=[...document.querySelectorAll('#mainTabs button')];
 function setTab(t){
   tab=t; document.body.dataset.tab=t;
   tabs.forEach(b=>b.setAttribute('aria-selected',b.dataset.t===t));
-  $('tabLaws').hidden=t!=='laws'; $('tabTax').hidden=t!=='tax'; $('tabAssets').hidden=t!=='assets'; $('tabReg').hidden=t!=='reg'; $('tabCheck').hidden=t!=='check';
-  if(t==='tax')renderTax(); if(t==='assets')renderAssets(); if(t==='reg')renderReg(); if(t==='check')renderCheck();
+  $('tabLaws').hidden=t!=='laws'; $('tabTax').hidden=t!=='tax'; $('tabAssets').hidden=t!=='assets'; $('tabReg').hidden=t!=='reg'; $('tabCheck').hidden=t!=='check'; $('tabDebts').hidden=t!=='debts';
+  if(t==='tax')renderTax(); if(t==='assets')renderAssets(); if(t==='reg')renderReg(); if(t==='check')renderCheck(); if(t==='debts')renderDebts();
   try{history.replaceState(null,'',t==='book'?location.pathname:'#'+t)}catch(e){}
 }
 tabs.forEach(b=>b.onclick=()=>setTab(b.dataset.t));
-PK.onRender=()=>{if(tab==='tax')renderTax(); if(tab==='assets')renderAssets(); if(tab==='reg'&&!reg&&!regLoading)renderReg(); if(tab==='check')renderCheck()};
+PK.onRender=()=>{if(tab==='tax')renderTax(); if(tab==='assets')renderAssets(); if(tab==='reg'&&!reg&&!regLoading)renderReg(); if(tab==='check')renderCheck(); if(tab==='debts'&&!debtEdit)renderDebts()};
 
 /* ---------- pomocné ---------- */
 const years=()=>{const s=new Set(PK.entries.map(e=>(e.date||'').slice(0,4)).filter(Boolean));s.add(String(new Date().getFullYear()));return [...s].sort().reverse()};
@@ -269,6 +270,7 @@ const CHECKS=[
  ['zalohy','Každá vydaná záloha je vyúčtovaná: doklady za utracené peníze jsou zapsané jako výdaj a nevyčerpaný zbytek jako vrácení zálohy.'],
  ['pujcky','Půjčky a jejich splátky jsou vedené v knize pohledávek a závazků, ne jako běžný výdaj či příjem.'],
  ['inventura','Revizor kontroluje pokladní hotovost (nejméně 4× ročně) a o kontrole je zápis se stavem hotovosti.'],
+ ['revizor','Revizor sboru je zvolen valnou hromadou a není členem výboru (starosta, náměstek, velitel, hospodář ani jiný člen výboru revizorem být nemůže).'],
  ['majetek','K 31. 12. proběhne inventarizace majetku a pokladní hotovosti.'],
  ['archiv','Doklady a knihy se archivují nejméně 5 let po skončení roku.']];
 function renderCheck(){
@@ -291,7 +293,7 @@ function renderCheck(){
   // 6 tržba mimo kategorii Tržba
   add('warn','Tržba vedená v jiné kategorii','Text zápisu mluví o tržbě, ale kategorie není Tržba. Tržby z hostinské činnosti a prodeje patří do vedlejší činnosti, kategorie musí sedět.',E.filter(e=>/tržb|trzb/i.test(short(e.text))&&e.type==='in'&&e.cat!=='Tržba'&&e.cat!=='Pivo'));
   // 7 půjčky / vyrovnání
-  add('warn','Půjčka, vyrovnání nebo převod peněz','Splátky půjček a přesuny peněz nejsou příjmem ani výdajem spolku. Patří do knihy pohledávek a závazků, případně mezi průběžné položky (kategorie Zálohy), a musí k nim být doklad.',E.filter(e=>/půjč|pujc|vyrovn|stará pokladn|staré pokladn|kasírk|kasirk/i.test(e.text)&&e.cat!=='Zálohy'));
+  add('warn','Půjčka, vyrovnání nebo převod peněz','Splátky půjček a přesuny peněz nejsou příjmem ani výdajem spolku. Patří do knihy pohledávek a závazků, případně mezi průběžné položky (kategorie Zálohy), a musí k nim být doklad.',E.filter(e=>/půjč|pujc|vyrovn|stará pokladn|staré pokladn|kasírk|kasirk/i.test(e.text)&&e.cat!=='Zálohy'&&!(e.cat==='Tržba'&&/tržb|trzb/i.test(e.text))));
   // 8 stručný popis
   add('info','Velmi stručný popis','Z popisu musí být jasné, co se platilo nebo za co se přijalo (např. „Pizza – občerstvení na brigádu 10. 7.“).',E.filter(e=>short(e.text).replace(/ \(…\).*/,'').trim().length<9));
   // 9 pořadí čísel
@@ -334,6 +336,73 @@ function renderCheck(){
   });
   el.querySelectorAll('[data-chk]').forEach(c=>c.onchange=()=>{const m=Object.assign({},PK.settings.checks||{});m[c.dataset.chk]=c.checked;PK.saveSettings({checks:m})});
 }
+
+/* ---------- závazky a pohledávky (kniha pohledávek a závazků) ---------- */
+let debtEdit=null;
+const debtsAll=()=>(PK.settings.debts||[]).slice();
+const entryById=id=>PK.entries.find(e=>e.id===id);
+function debtCalc(d){
+  const links=(d.links||[]).map(l=>({...l,e:entryById(l.id)})).filter(l=>l.e);
+  const paid=links.filter(l=>l.role==='uhrada').reduce((s,l)=>s+l.e.amount,0)+(+d.paidOther||0);
+  const rest=Math.max(0,(+d.amount||0)-paid);
+  const today=PK.today();
+  const state=rest<=0?'Uhrazeno':(d.due&&d.due<today?'Po splatnosti':'Otevřeno');
+  return {links,paid,rest,state};
+}
+function saveDebts(list){return PK.saveSettings({debts:list}).then(()=>renderDebts())}
+function renderDebts(){
+  const el=$('tabDebts'); const D=debtsAll();
+  const part=kind=>{
+    const L=D.filter(d=>d.kind===kind);
+    const rows=L.map(d=>{const c=debtCalc(d);
+      const lk=c.links.map(l=>`<span style="display:block;font-size:12.5px;color:var(--muted)">${l.role==='vznik'?'Vznik':'Úhrada'}: ${esc(l.e.doc||'')} ${czDate(l.e.date)} – ${money(l.e.amount)}</span>`).join('');
+      return `<tr><td><b>${esc(d.party||'—')}</b><span style="display:block">${esc(d.title||'')}</span>${d.docRef?`<span style="display:block;font-size:12.5px;color:var(--muted)">Doklad: ${esc(d.docRef)}</span>`:''}${d.note?`<span style="display:block;font-size:12.5px;color:var(--muted)">${esc(d.note)}</span>`:''}${lk}</td>
+      <td class="nw">${d.date?czDate(d.date):'<span style="color:var(--exp)">doplnit</span>'}</td><td class="nw">${d.due?czDate(d.due):'—'}</td>
+      <td class="n">${money(d.amount)}</td><td class="n">${money(c.paid)}</td><td class="n"><b>${money(c.rest)}</b></td>
+      <td class="nw"><span class="pill ${c.state==='Uhrazeno'?'drm':'dhm'}">${c.state}</span></td>
+      ${isOwner()?`<td class="nw"><button data-dedit="${d.id}">Upravit</button><button data-ddel="${d.id}" style="color:var(--exp)">Smazat</button></td>`:''}</tr>`}).join('');
+    const open=L.reduce((s,d)=>s+debtCalc(d).rest,0);
+    return `<h3>${kind==='z'?'Závazky – co sbor dluží':'Pohledávky – co dluží sboru'}</h3>
+    <div class="xbox"><table class="astable"><thead><tr><th>${kind==='z'?'Věřitel':'Dlužník'} / předmět</th><th>Vznik</th><th>Splatnost</th><th style="text-align:right">Částka</th><th style="text-align:right">Uhrazeno</th><th style="text-align:right">Zbývá</th><th>Stav</th>${isOwner()?'<th></th>':''}</tr></thead>
+    <tbody>${rows||`<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:16px">Žádné ${kind==='z'?'závazky':'pohledávky'}.</td></tr>`}</tbody></table></div>
+    <p class="note">Neuhrazeno celkem: <b>${money(open)}</b></p>`;
+  };
+  let form='';
+  if(isOwner()){
+    const d=debtEdit||{kind:'z',links:[]};
+    const cand=[...PK.entries].sort((a,b)=>a.date<b.date?1:-1).filter(e=>e.cat==='Zálohy'||/půjč|pujc|vratk|vyrovn/i.test(e.text||'')||(d.links||[]).some(l=>l.id===e.id));
+    const linkRows=cand.map(e=>{const l=(d.links||[]).find(x=>x.id===e.id);return `<tr><td class="nw">${czDate(e.date)}</td><td class="nw">${esc(e.doc||'')}</td><td>${esc((e.text||'').slice(0,60))}</td><td class="n">${e.type==='in'?'+':'−'}${money(e.amount)}</td><td><select data-link="${e.id}" style="padding:5px 6px"><option value="">—</option><option value="vznik" ${l&&l.role==='vznik'?'selected':''}>vznik</option><option value="uhrada" ${l&&l.role==='uhrada'?'selected':''}>úhrada</option></select></td></tr>`}).join('');
+    form=`<details class="law" id="debtForm" ${debtEdit?'open':''}><summary style="cursor:pointer;font-weight:600">${debtEdit&&debtEdit.id?'Upravit záznam':'Přidat závazek nebo pohledávku'}</summary>
+    <div class="grid" style="margin-top:12px">
+      <div class="f s3"><label for="dKind">Typ</label><select id="dKind"><option value="z" ${d.kind==='z'?'selected':''}>Závazek (dlužíme my)</option><option value="p" ${d.kind==='p'?'selected':''}>Pohledávka (dluží nám)</option></select></div>
+      <div class="f s5"><label for="dParty">Věřitel / dlužník</label><input id="dParty" value="${esc(d.party||'')}"></div>
+      <div class="f s4"><label for="dAmt">Částka (Kč)</label><input id="dAmt" inputmode="decimal" value="${d.amount||''}"></div>
+      <div class="f s6"><label for="dTitle">Předmět (např. půjčka na nákup piva)</label><input id="dTitle" value="${esc(d.title||'')}"></div>
+      <div class="f s3"><label for="dDate">Datum vzniku</label><input type="date" id="dDate" value="${d.date||''}"></div>
+      <div class="f s3"><label for="dDue">Splatnost</label><input type="date" id="dDue" value="${d.due||''}"></div>
+      <div class="f s6"><label for="dDoc">Doklad (smlouva, potvrzení)</label><input id="dDoc" value="${esc(d.docRef||'')}"></div>
+      <div class="f s3"><label for="dOther">Uhrazeno mimo pokladnu (Kč)</label><input id="dOther" inputmode="decimal" value="${d.paidOther||''}"></div>
+      <div class="f s12"><label for="dNote">Poznámka</label><input id="dNote" value="${esc(d.note||'')}"></div>
+    </div>
+    <p class="note">Propojte zápisy z pokladní knihy: kdy peníze přišly nebo odešly (vznik) a kterými zápisy se dluh splácel (úhrada).</p>
+    <div class="xbox"><table class="astable" style="min-width:560px"><tbody>${linkRows||'<tr><td>Žádné vhodné zápisy (kategorie Zálohy).</td></tr>'}</tbody></table></div>
+    <div class="actions"><button class="btn primary" id="dSave" type="button">Uložit</button>${debtEdit?'<button class="btn ghost" id="dCancel" type="button">Zrušit</button>':''}</div></details>`;
+  }
+  el.innerHTML=`<h2>Závazky a pohledávky</h2>
+  <p class="lead">Kniha pohledávek a závazků podle § 13b zákona o účetnictví. Patří sem půjčky, nezaplacené faktury a peníze, které sbor někomu dluží nebo které dluží někdo sboru. Splátky a přijetí půjček se v pokladní knize vedou v kategorii Zálohy, aby se nezapočítaly do příjmů a výdajů.</p>
+  ${part('z')}${part('p')}${form}`;
+  el.querySelectorAll('[data-dedit]').forEach(b=>b.onclick=()=>{debtEdit=JSON.parse(JSON.stringify(debtsAll().find(x=>x.id===b.dataset.dedit)));renderDebts();$('debtForm').scrollIntoView({behavior:'smooth'})});
+  el.querySelectorAll('[data-ddel]').forEach(b=>b.onclick=()=>{const d=debtsAll().find(x=>x.id===b.dataset.ddel);if(d&&confirm('Smazat záznam „'+(d.party||'')+' – '+(d.title||'')+'“?'))saveDebts(debtsAll().filter(x=>x.id!==d.id))});
+  const sv=$('dSave'); if(sv)sv.onclick=()=>{
+    const amt=parseFloat(String($('dAmt').value).replace(/\s/g,'').replace(',','.'));
+    if(!$('dParty').value.trim()||!(amt>0)){toastX('Vyplňte věřitele/dlužníka a částku.');return}
+    const links=[...el.querySelectorAll('[data-link]')].filter(s=>s.value).map(s=>({id:s.dataset.link,role:s.value}));
+    const rec={id:(debtEdit&&debtEdit.id)||('d_'+Date.now().toString(36)),kind:$('dKind').value,party:$('dParty').value.trim(),title:$('dTitle').value.trim(),amount:amt,date:$('dDate').value,due:$('dDue').value,docRef:$('dDoc').value.trim(),paidOther:parseFloat(String($('dOther').value).replace(',','.'))||0,note:$('dNote').value.trim(),links};
+    const list=debtsAll().filter(x=>x.id!==rec.id); list.push(rec); debtEdit=null; saveDebts(list);
+  };
+  const cn=$('dCancel'); if(cn)cn.onclick=()=>{debtEdit=null;renderDebts()};
+}
+function toastX(t){const el=document.getElementById('toast');if(!el)return alert(t);el.textContent=t;el.classList.add('on');setTimeout(()=>el.classList.remove('on'),2000)}
 
 /* ---------- zákony a předpisy ---------- */
 function lawsHTML(){
@@ -380,5 +449,5 @@ function lawsHTML(){
 }
 
 /* ---------- start ---------- */
-const h0=(location.hash||'').slice(1); setTab(['laws','tax','assets','reg','check'].includes(h0)?h0:'book');
+const h0=(location.hash||'').slice(1); setTab(['laws','tax','assets','reg','check','debts'].includes(h0)?h0:'book');
 })();
