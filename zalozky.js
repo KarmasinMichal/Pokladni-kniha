@@ -198,7 +198,7 @@ function renderTax(){
   $('dpPdf').onclick=e=>runPdf(()=>docTax(taxYear),'priznani-DPPO-'+taxYear+'.pdf','download',e.currentTarget,'Přiznání k dani z příjmů PO');
   $('dpXml').onclick=()=>{orgInfo().then(()=>{downloadText(dpXml(taxYear),'DPPO_'+taxYear+'_'+ico+'.xml','application/xml');toastX('XML staženo – načtěte ho v EPO')})};
   const sv=$('dpSave'); if(sv)sv.onclick=()=>PK.saveSettings({dppo:{ufo:$('dpUfo').value.trim(),pracufo:$('dpPrac').value.trim(),nace:$('dpNace').value.trim(),tel:$('dpTel').value.trim(),jmeno:$('dpJm').value.trim(),prijmeni:$('dpPr').value.trim(),postaveni:$('dpPost').value.trim()}}).then(()=>{toastX('Uloženo');renderTax()});
-  if(!regMini)orgInfo().then(()=>{if(tab==='tax'&&!(PK.settings.dppo&&PK.settings.dppo.jmeno))renderTax()});
+  if(!regMini&&ico&&!window.__dpOrg){window.__dpOrg=1;orgInfo().then(()=>{if(tab==='tax'&&!(PK.settings.dppo&&PK.settings.dppo.jmeno))renderTax()})}
 }
 
 /* ---------- majetek ---------- */
