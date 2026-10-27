@@ -273,7 +273,13 @@ const CHECKS=[
  ['inventura','Revizor kontroluje pokladní hotovost (nejméně 4× ročně) a o kontrole je zápis se stavem hotovosti.'],
  ['revizor','Revizor sboru je zvolen valnou hromadou a není členem výboru (starosta, náměstek, velitel, hospodář ani jiný člen výboru revizorem být nemůže).'],
  ['majetek','K 31. 12. proběhne inventarizace majetku a pokladní hotovosti.'],
- ['archiv','Doklady a knihy se archivují nejméně 5 let po skončení roku.']];
+ ['archiv','Doklady a knihy se archivují nejméně 5 let po skončení roku.'],
+ ['provozovna','Klubovna (a stánek na akcích) je oznámena jako provozovna a označena názvem, IČO, odpovědnou osobou a prodejní dobou.'],
+ ['hygiena','Obsluha občerstvení má zdravotní průkazy u sebe; stravovací služba je oznámena KHS/SZPI a dodržujeme hygienu (HACCP).'],
+ ['alergeny','U jídla na akcích je písemně a viditelně uveden seznam alergenů a ceník.'],
+ ['alkohol18','Na místě prodeje visí nápis o zákazu prodeje alkoholu osobám mladším 18 let (písmo min. 2 cm) a mladistvým se nenalévá.'],
+ ['esm','Údaje v evidenci skutečných majitelů (esm.justice.cz) odpovídají aktuálnímu výboru.'],
+ ['osa','Akce s hudbou jsou nahlášené OSA.']];
 function renderCheck(){
   const el=$('tabCheck'); const ys=years(); if(!chkYear||!ys.includes(chkYear))chkYear=ys.includes('2026')?'2026':ys[0];
   const all=[...PK.entries].sort((a,b)=>a.date<b.date?-1:a.date>b.date?1:(a.created||0)-(b.created||0));
@@ -542,46 +548,117 @@ function renderForms(){
 
 /* ---------- zákony a předpisy ---------- */
 function lawsHTML(){
-  const L=(title,url,items)=>`<div class="law"><h4><a href="${url}" target="_blank" rel="noopener">${title}</a></h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul></div>`;
+  const L=(title,url,items,note)=>`<div class="law"><h4><a href="${url}" target="_blank" rel="noopener">${title}</a></h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul>${note?`<p style="margin:8px 0 0;font-size:13.5px;color:var(--muted)">${note}</p>`:''}</div>`;
+  const S=t=>`<h3>${t}</h3>`;
   return `
-  <h2>Zákony a předpisy pro hospodaření SDH</h2>
-  <p class="lead">Přehled předpisů, podle kterých je pokladní kniha vedena a podle kterých se počítají záložky Daňové přiznání a Majetek. Stav k 26. 10. 2026. Odkazy vedou na aktuální znění zákonů.</p>
+  <h2>Zákony a předpisy pro SDH Vlkov</h2>
+  <p class="lead">Přehled platných předpisů, podle kterých sbor hospodaří a provozuje své živnosti. Obsah byl ověřen k 27. 10. 2026. Odkazy vedou na aktuální znění. Jde o informativní přehled sestavený z veřejných zdrojů; nenahrazuje právníka ani daňového poradce.</p>
+  <div class="infobox"><b>Sbor v kostce:</b> pobočný spolek SH ČMS (IČO 65758048), spolkový rejstřík L 31552 u Městského soudu v Praze. Aktivní živnosti: <b>hostinská činnost</b> (řemeslná, odpovědný zástupce Zdeněk Musil), <b>výroba, obchod a služby – velkoobchod a maloobchod</b> (volná) a <b>prodej kvasného lihu, konzumního lihu a lihovin</b> (koncesovaná). Z toho plynou povinnosti nejen účetní a daňové, ale i hygienické, k prodeji alkoholu a k provozovnám.</div>
+
+  ${S('1. Spolek a jeho fungování')}
   ${L('Zákon č. 89/2012 Sb., občanský zákoník','https://www.zakonyprolidi.cz/cs/2012-89',[
-    '<b>§ 214 a násl.</b> – spolek jako právnická osoba založená ke společnému naplňování zájmů členů.',
-    '<b>§ 217</b> – spolek může vedle hlavní činnosti provozovat vedlejší hospodářskou činnost (např. občerstvení na akcích), zisk lze použít jen pro spolkovou činnost.',
-    '<b>§ 228–231</b> – pobočný spolek. SDH je pobočným spolkem Sdružení hasičů Čech, Moravy a Slezska, má vlastní právní osobnost a IČO a sám odpovídá za své hospodaření.'])}
-  ${L('Zákon č. 563/1991 Sb., o účetnictví','https://www.zakonyprolidi.cz/cs/1991-563',[
-    '<b>§ 1f</b> – spolek a pobočný spolek může vést jednoduché účetnictví, pokud není plátcem DPH, jeho celkové příjmy za poslední uzavřené období nepřesáhly 3 000 000 Kč a hodnota majetku nepřesahuje 3 000 000 Kč.',
-    '<b>§ 13b</b> – v jednoduchém účetnictví se vedou účetní knihy: peněžní deník, kniha pohledávek a závazků a pomocné knihy o ostatních složkách majetku. Tato pokladní kniha plní roli peněžního deníku pro hotovost.',
-    '<b>§ 11</b> – každý zápis musí mít účetní doklad (pokladní doklad): označení, obsah, účastníky, částku, datum vyhotovení a uskutečnění a podpis odpovědné osoby.',
-    '<b>§ 6, § 29 a § 30</b> – inventarizace majetku a závazků, nejméně jednou ročně k poslednímu dni účetního období.',
-    'Do 6 měsíců po skončení roku se sestavuje přehled o příjmech a výdajích a přehled o majetku a závazcích (účetní závěrka v jednoduchém účetnictví).',
-    '<b>§ 31</b> – účetní záznamy (pokladní doklady, kniha) se archivují nejméně 5 let po skončení účetního období.'])}
-  ${L('Vyhláška č. 325/2015 Sb., pro účetní jednotky vedoucí jednoduché účetnictví','https://www.zakonyprolidi.cz/cs/2015-325',[
-    'Stanoví obsah peněžního deníku: zápisy chronologicky, členění příjmů a výdajů podle druhu (proto kategorie), průběžné položky (např. zálohy) zvlášť.',
-    'Peněžní deník obsahuje zůstatky hotovosti na začátku a na konci účetního období (počáteční a konečný stav).',
-    'Upravuje knihu pohledávek a závazků, pomocné knihy o majetku a vzory přehledu o příjmech a výdajích a přehledu o majetku a závazcích.'])}
-  ${L('Zákon č. 586/1992 Sb., o daních z příjmů','https://www.zakonyprolidi.cz/cs/1992-586',[
-    '<b>§ 17a</b> – spolek je veřejně prospěšným poplatníkem.',
-    '<b>§ 18a odst. 1 písm. a)</b> – příjmy z hlavní (nepodnikatelské) činnosti nejsou předmětem daně, pokud jsou výdaje na tuto činnost vyšší. Příjmy z vedlejší hospodářské činnosti (tržby z občerstvení, prodej piva) předmětem daně jsou.',
-    '<b>§ 19b</b> – osvobození bezúplatných příjmů (např. dary od obce či sponzorů) za zákonných podmínek.',
-    '<b>§ 20 odst. 7</b> – veřejně prospěšný poplatník může snížit základ daně až o 30 %, nejvýše o 1 000 000 Kč; je-li 30 % méně než 300 000 Kč, lze odečíst 300 000 Kč, nejvýše do výše základu daně. Ušetřené prostředky se musí použít na hlavní činnost.',
-    'Základ daně se zaokrouhluje na celé tisíce Kč dolů (§ 20). <b>§ 21</b> – sazba daně z příjmů právnických osob je 21 %.',
-    '<b>§ 26</b> – hmotný majetek se vstupní cenou nad 80 000 Kč a dobou použitelnosti delší než 1 rok je dlouhodobý hmotný majetek.',
-    '<b>§ 38mb</b> – veřejně prospěšný poplatník nemusí podat přiznání, jen pokud má výhradně příjmy, které nejsou předmětem daně, jsou osvobozené nebo zdaněné srážkou. Sbor s tržbami přiznání podává.'])}
-  ${L('Zákon č. 280/2009 Sb., daňový řád','https://www.zakonyprolidi.cz/cs/2009-280',[
-    '<b>§ 136</b> – lhůta pro podání přiznání jsou 3 měsíce po skončení zdaňovacího období, při elektronickém podání 4 měsíce (pokud připadne na víkend či svátek, posouvá se na nejbližší pracovní den).',
-    '<b>§ 72</b> – subjekt s datovou schránkou (každá právnická osoba) podává přiznání elektronicky, např. přes portál Moje daně.'])}
+    '<b>§ 214 a násl.</b> – spolek je právnická osoba založená ke společnému naplňování zájmů členů; řídí se stanovami.',
+    '<b>§ 217</b> – vedle hlavní činnosti smí spolek provozovat vedlejší hospodářskou činnost (u sboru občerstvení a prodej na akcích); zisk lze použít jen na spolkovou činnost.',
+    '<b>§ 228 a násl.</b> – pobočný spolek. SDH je pobočným spolkem SH ČMS s vlastní právní osobností a sám odpovídá za své hospodaření.'])}
+  ${L('Stanovy a vnitřní předpisy SH ČMS','https://www.dh.cz',[
+    'Stanovy SH ČMS, organizační, jednací a volební řád a směrnice o hospodaření jsou pro sbor závazné.',
+    'Revizora volí a odvolává valná hromada sboru; na jednání výboru má jen hlas poradní.',
+    'Revizor nesmí být současně členem výkonného nebo statutárního orgánu na stejném stupni – revizorem tedy nemůže být starosta ani jiný člen výboru.',
+    'Revizor kontroluje hospodaření včetně pokladní hotovosti nejméně 4× ročně a o kontrole sepíše zápis (formulář je v záložce Formuláře).'])}
+  ${L('Zákon č. 37/2021 Sb., o evidenci skutečných majitelů','https://www.zakonyprolidi.cz/cs/2021-37',[
+    'Spolek je evidující osobou – musí mít v evidenci skutečných majitelů zapsané správné údaje (u spolků zpravidla členové statutárního orgánu).',
+    'Při žádosti o dotaci ze státního rozpočtu musí spolek předložit jako povinnou přílohu úplný výpis z evidence skutečných majitelů.',
+    'Kontrola zápisu: <a href="https://esm.justice.cz" target="_blank" rel="noopener">esm.justice.cz</a>. Po změně ve výboru ověřte, že se údaje propsaly.'])}
   ${L('Zákon č. 304/2013 Sb., o veřejných rejstřících','https://www.zakonyprolidi.cz/cs/2013-304',[
-    '<b>§ 66</b> – do sbírky listin spolkového rejstříku se ukládá účetní závěrka; spolek s jednoduchým účetnictvím ukládá přehled o majetku a závazcích. Za nesplnění hrozí pořádková pokuta až 100 000 Kč (po předchozí výzvě soudu).'])}
+    'Změny ve výboru (starosta, náměstek) a stanovách se zapisují do spolkového rejstříku.',
+    '<b>§ 66</b> – do sbírky listin se ukládá účetní závěrka; spolek s jednoduchým účetnictvím ukládá přehled o majetku a závazcích. Za nesplnění hrozí po výzvě soudu pořádková pokuta.'])}
+  ${L('Ochrana osobních údajů – nařízení (EU) 2016/679 (GDPR) a zákon č. 110/2019 Sb.','https://www.zakonyprolidi.cz/cs/2019-110',[
+    'Evidence členů, kontakty a fotografie z akcí jsou osobní údaje. Sbírejte jen potřebné údaje, chraňte je a nesdílejte je bez důvodu.',
+    'Přístupové údaje do této aplikace nepředávejte mimo sbor.'])}
+
+  ${S('2. Účetnictví a pokladna')}
+  ${L('Zákon č. 563/1991 Sb., o účetnictví','https://www.zakonyprolidi.cz/cs/1991-563',[
+    '<b>§ 1f</b> – spolek smí vést jednoduché účetnictví, pokud není plátcem DPH, jeho celkové příjmy za poslední uzavřené období nepřesáhly 3 000 000 Kč a hodnota majetku nepřesahuje 3 000 000 Kč.',
+    '<b>§ 13b</b> – účetní knihy v jednoduchém účetnictví: peněžní deník (tato pokladní kniha), kniha pohledávek a závazků a pomocné knihy o ostatních složkách majetku (záložky Závazky a pohledávky a Majetek).',
+    '<b>§ 11</b> – každý zápis musí mít účetní doklad: označení, obsah, účastníky, částku, datum vyhotovení a uskutečnění a podpis odpovědné osoby.',
+    '<b>§ 29 a § 30</b> – inventarizace majetku, závazků a pokladní hotovosti nejméně jednou ročně k 31. 12.',
+    '<b>§ 31</b> – účetní záznamy a doklady se archivují nejméně 5 let po skončení účetního období.'])}
+  ${L('Vyhláška č. 325/2015 Sb., pro jednotky vedoucí jednoduché účetnictví','https://www.zakonyprolidi.cz/cs/2015-325',[
+    'Peněžní deník: chronologické zápisy, členění příjmů a výdajů podle druhu (kategorie), průběžné položky (zálohy, převody, půjčky) zvlášť, zůstatky na začátku a konci období.',
+    '<b>Příloha č. 1</b> – přehled o příjmech a výdajích v členění na hlavní a hospodářskou činnost (v tisících Kč).',
+    '<b>Příloha č. 2</b> – přehled o majetku a závazcích k prvnímu a poslednímu dni účetního období (v tisících Kč).',
+    'Oba přehledy se sestavují do 6 měsíců po skončení roku; aplikace je vytvoří v záložce Formuláře.'])}
   ${L('Zákon č. 254/2004 Sb., o omezení plateb v hotovosti','https://www.zakonyprolidi.cz/cs/2004-254',[
-    '<b>§ 4</b> – platbu přesahující 270 000 Kč za jeden den nelze provést v hotovosti, musí jít přes účet.'])}
+    '<b>§ 4</b> – platbu přesahující 270 000 Kč za jeden den nelze provést v hotovosti.'])}
+
+  ${S('3. Daně')}
+  ${L('Zákon č. 586/1992 Sb., o daních z příjmů','https://www.zakonyprolidi.cz/cs/1992-586',[
+    '<b>§ 17a</b> – spolek je veřejně prospěšný poplatník.',
+    '<b>§ 18a</b> – příjmy z hlavní činnosti nejsou předmětem daně, jen pokud jsou výdaje na ni vyšší. Tržby z hostinské činnosti a prodeje nápojů (živnosti sboru) předmětem daně jsou.',
+    '<b>§ 19b</b> – osvobození přijatých darů a jiných bezúplatných příjmů za zákonných podmínek.',
+    '<b>§ 20 odst. 7</b> – snížení základu daně až o 30 %, max. 1 000 000 Kč; je-li 30 % méně než 300 000 Kč, lze odečíst 300 000 Kč, nejvýše do výše základu. Ušetřené prostředky se musí použít na hlavní činnost.',
+    '<b>§ 21</b> – sazba daně z příjmů právnických osob 21 %. Základ se zaokrouhluje na celé tisíce Kč dolů.',
+    '<b>§ 26</b> – hmotný majetek nad 80 000 Kč s použitelností přes 1 rok je pro daně dlouhodobý hmotný majetek.',
+    '<b>§ 38mb</b> – přiznání nemusí podat jen ten, kdo má výhradně příjmy, které nejsou předmětem daně, jsou osvobozené nebo zdaněné srážkou. Sbor s tržbami přiznání podává.'])}
+  ${L('Zákon č. 280/2009 Sb., daňový řád','https://www.zakonyprolidi.cz/cs/2009-280',[
+    '<b>§ 136</b> – lhůta pro přiznání jsou 3 měsíce po skončení roku, při elektronickém podání 4 měsíce (při víkendu či svátku posun na pracovní den).',
+    '<b>§ 72</b> – kdo má datovou schránku (každá právnická osoba), podává přiznání elektronicky – portál <a href="https://www.mojedane.cz" target="_blank" rel="noopener">Moje daně</a>.'])}
+  ${L('Zákon č. 235/2004 Sb., o dani z přidané hodnoty','https://www.zakonyprolidi.cz/cs/2004-235',[
+    'Sbor není plátcem DPH. Plátcem by se stal, kdyby jeho obrat přesáhl 2 000 000 Kč za kalendářní rok (stav od 1. 1. 2025). Kontrolu obratu ukazuje záložka Kontrola evidence.'])}
+  ${L('Evidence tržeb','https://www.financnisprava.cz',[
+    'Elektronická evidence tržeb (EET) byla zrušena k 1. 1. 2023 – tržby se neevidují online, ale každá tržba musí mít doklad a zápis v pokladní knize.'])}
+
+  ${S('4. Živnostenská oprávnění sboru')}
+  ${L('Zákon č. 455/1991 Sb., živnostenský zákon','https://www.zakonyprolidi.cz/cs/1991-455',[
+    '<b>Hostinská činnost</b> je živnost řemeslná, <b>prodej kvasného lihu, konzumního lihu a lihovin</b> živnost koncesovaná a <b>výroba, obchod a služby</b> živnost volná.',
+    '<b>§ 11</b> – právnická osoba provozuje řemeslnou a koncesovanou živnost prostřednictvím odpovědného zástupce. Odpovědný zástupce pro koncesi musí být schválen živnostenským úřadem.',
+    '<b>§ 49</b> – změny údajů a dokladů (např. odpovědný zástupce, sídlo, statutární orgán) se živnostenskému úřadu oznamují do 15 dnů, pokud se nepropíší ze základních registrů nebo veřejného rejstříku.',
+    '<b>§ 17</b> – provozovna je prostor, kde se živnost provozuje, včetně stánku a mobilní provozovny. Zahájení a ukončení provozování v provozovně se oznamuje předem živnostenskému úřadu. Pro každou provozovnu musí být určena osoba odpovědná za její činnost.',
+    '<b>§ 17</b> – provozovna musí být trvale a zvenčí viditelně označena názvem a IČO sboru; u prodeje spotřebitelům i jménem osoby odpovědné za provozovnu a prodejní dobou. Stánek se označuje i sídlem sboru.'],
+    'Doporučení: ověřte, že klubovna (a případně stánek na akcích) je jako provozovna oznámena a označena. Aktuální stav živností ukazuje záložka Živnostenský list a výpis.')}
+
+  ${S('5. Hostinská činnost a potraviny')}
+  ${L('Nařízení (ES) č. 852/2004 o hygieně potravin','https://eur-lex.europa.eu/legal-content/CS/ALL/?uri=CELEX:32004R0852',[
+    'Každý provozovatel stravovací služby (i při akcích) musí zavést postupy založené na zásadách HACCP, případně správné hygienické praxe.',
+    'Jde o hygienu přípravy a výdeje, skladování, teploty, úklid a sanitaci.'])}
+  ${L('Zákon č. 258/2000 Sb., o ochraně veřejného zdraví, a vyhláška č. 137/2004 Sb.','https://www.zakonyprolidi.cz/cs/2000-258',[
+    'Kdo připravuje nebo vydává jídlo a nápoje, musí mít zdravotní průkaz a znalosti hygieny; zdravotní průkazy mají mít obsluhující při sobě po celou dobu akce.',
+    'Vyhláška č. 137/2004 Sb. upravuje hygienické požadavky na stravovací služby včetně krátkodobého občerstvení při jednorázových akcích ve stáncích a stanech.',
+    '<b>§ 23 odst. 5</b> – zahájení, změnu a ukončení stravovací služby se oznamuje orgánu ochrany veřejného zdraví (krajská hygienická stanice).'])}
+  ${L('Zákon č. 110/1997 Sb., o potravinách – registrace u SZPI','https://www.szpi.gov.cz',[
+    'Od 1. 1. 2025 se zahájení, změna a ukončení stravovací služby oznamuje Státní zemědělské a potravinářské inspekci; oznamovací povinnost vůči KHS přitom trvá.',
+    'Kdo činnost oznámil KHS před 1. 1. 2025, registrační povinnost splnil a SZPI už znovu oznamovat nemusí.'])}
+  ${L('Nařízení (EU) č. 1169/2011 o informacích o potravinách – alergeny','https://eur-lex.europa.eu/legal-content/CS/ALL/?uri=CELEX:32011R1169',[
+    'Povinnost informovat o alergenech platí i pro nebalené potraviny a pokrmy, tedy i pro občerstvení na akcích.',
+    'Seznam alergenů musí být písemně a viditelně uveden u pokrmů (jídelní lístek, tabule, vývěska u výdeje) – pouhá ústní informace nestačí.'])}
+  ${L('Zákon č. 634/1992 Sb., o ochraně spotřebitele','https://www.zakonyprolidi.cz/cs/1992-634',[
+    'Zákazník musí znát cenu před nákupem – u stánku i výčepu mějte viditelný ceník.'])}
+
+  ${S('6. Prodej alkoholu')}
+  ${L('Zákon č. 65/2017 Sb., o ochraně zdraví před škodlivými účinky návykových látek','https://www.zakonyprolidi.cz/cs/2017-65',[
+    'Alkohol se nesmí prodat ani podat osobám mladším 18 let; při pochybnostech o věku se prodej odmítne.',
+    'Na místě prodeje musí být viditelný text o zákazu prodeje alkoholických nápojů osobám mladším 18 let; minimální velikost písma je 2 cm.',
+    'Prodáváte-li i tabákové výrobky nebo e-cigarety, musí text výslovně jmenovat všechny tyto druhy zboží.'])}
+  ${L('Zákon č. 307/2013 Sb., o povinném značení lihu','https://www.zakonyprolidi.cz/cs/2013-307',[
+    'Lihoviny smí sbor jako konečný prodejce nakupovat jen od registrovaného distributora lihu a musí mu sdělit, že je kupuje jako konečný prodejce, ne pro vlastní spotřebu.',
+    'Spotřebitelská balení lihovin musí být označena kontrolní páskou; nákupní doklady uchovávejte.',
+    'Od 1. 7. 2025 platí pravidla pro velikosti balení lihu v restauračním zařízení na jednom prodejním místě.'])}
+
+  ${S('7. Akce, sbírky a dotace')}
+  ${L('Zákon č. 121/2000 Sb., autorský zákon','https://www.zakonyprolidi.cz/cs/2000-121',[
+    'Hraje-li na akci (zábava, pouť, ples) hudba, pořadatel ji hlásí kolektivnímu správci (OSA) a platí autorské odměny.'])}
+  ${L('Zákon č. 117/2001 Sb., o veřejných sbírkách','https://www.zakonyprolidi.cz/cs/2001-117',[
+    'Pokud sbor pořádá veřejnou sbírku (např. pro postižené povodní), musí ji předem oznámit krajskému úřadu a vyúčtovat.'])}
+  ${L('Zákon č. 250/2000 Sb., o rozpočtových pravidlech územních rozpočtů','https://www.zakonyprolidi.cz/cs/2000-250',[
+    '<b>§ 10a</b> – dotace od obce se poskytuje na základě veřejnoprávní smlouvy; peníze se smí použít jen na sjednaný účel a dotace se v termínu vyúčtuje.',
+    'Dotaci veďte v pokladní knize zvlášť (kategorie, popis s číslem smlouvy) a doklady k jejímu čerpání uchovejte.'])}
+
+  ${S('8. Požární ochrana')}
   ${L('Zákon č. 133/1985 Sb., o požární ochraně','https://www.zakonyprolidi.cz/cs/1985-133',[
-    'Jednotku sboru dobrovolných hasičů obce (JSDH) zřizuje a vybavuje obec. Technika a výstroj jednotky je majetkem obce a nepatří do majetku spolku SDH.'])}
-  ${L('Vnitřní předpisy SH ČMS','https://www.dh.cz',[
-    'Stanovy SH ČMS, organizační řád a směrnice o hospodaření závazné pro pobočné spolky.',
-    'Metodický pokyn ÚKRR č. 1/2017 – revizor sboru kontroluje hospodaření včetně pokladní hotovosti nejméně 4× ročně.'])}
-  <p class="note">Přehled je informativní a nenahrazuje právní ani daňové poradenství. Při nejasnostech se obraťte na okresní sdružení hasičů nebo daňového poradce.</p>`;
+    'Jednotku sboru dobrovolných hasičů obce (JSDH) zřizuje a vybavuje obec; technika a výstroj jednotky je majetkem obce, ne spolku SDH.',
+    'Do knihy majetku sboru patří jen to, co sbor pořídil ze svých peněz.'])}
+
+  <p class="note">Ověřeno z veřejných zdrojů (zákony v platném znění, Finanční správa, SZPI, KHS, ČOI, metodika SH ČMS) k 27. 10. 2026. Legislativa se mění – před důležitým rozhodnutím ověřte aktuální znění nebo se obraťte na okresní sdružení hasičů, daňového poradce či příslušný úřad.</p>`;
 }
 
 /* ---------- start ---------- */
