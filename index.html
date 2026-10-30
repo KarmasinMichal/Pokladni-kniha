@@ -61,6 +61,8 @@ input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px so
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
 .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
 .toolbar .f{grid-column:auto;min-width:180px}
+#catFilter.on{border-color:var(--teal);background:var(--teal-soft);color:var(--teal);font-weight:600}
+.catnote{font-size:13px;color:var(--muted);margin:-4px 0 12px}
 .sums{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
 @media(min-width:640px){.sums{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
 .sum{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -69,6 +71,7 @@ input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px so
 .sum.inc .v{color:var(--inc)} .sum.exp .v{color:var(--exp)}
 .tablebox{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:12px}
 table{border-collapse:collapse;width:100%;min-width:782px}
+table.nobal th:nth-child(6),table.nobal td:nth-child(6){display:none}
 th,td{padding:9px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
 th{font-size:12.5px;color:var(--muted);font-weight:600;background:var(--paper)}
 td.n,th.n{text-align:right;white-space:nowrap}
@@ -203,22 +206,24 @@ textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid 
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
       <div class="f"><label for="period">Období</label><select id="period"></select></div>
       <div class="f tabs"><label>Zobrazit</label><div class="toggle" role="group" aria-label="Zobrazit" id="viewTabs"><button type="button" class="all" data-v="all" aria-pressed="true">Příjmy + výdaje</button><button type="button" class="in" data-v="in" aria-pressed="false">Jen příjmy</button><button type="button" class="out" data-v="out" aria-pressed="false">Jen výdaje</button></div></div>
+      <div class="f"><label for="catFilter">Kategorie</label><select id="catFilter"></select></div>
     </div>
     <div class="actions" style="margin:0">
       <button class="btn primary" id="printBtn" type="button">Vytisknout</button>
       <button class="btn" id="pdfBtn" type="button">Uložit PDF</button>
           </div>
   </div>
+  <div class="catnote gated tab-book" id="catNote" hidden></div>
 
   <div class="sums gated tab-book">
     <div class="sum"><div class="lbl">Počáteční stav</div><div class="v" id="sOpen">0 Kč</div></div>
     <div class="sum inc"><div class="lbl">Příjmy</div><div class="v" id="sIn">0 Kč</div></div>
     <div class="sum exp"><div class="lbl">Výdaje</div><div class="v" id="sOut">0 Kč</div></div>
-    <div class="sum"><div class="lbl">Konečný stav</div><div class="v" id="sEnd">0 Kč</div></div>
+    <div class="sum"><div class="lbl" id="sEndLbl">Konečný stav</div><div class="v" id="sEnd">0 Kč</div></div>
   </div>
 
   <div class="tablebox gated tab-book">
-    <table>
+  <table id="bookTable">
       <thead><tr><th>Datum</th><th>Doklad</th><th>Text</th><th class="n">Příjem</th><th class="n">Výdaj</th><th class="n">Zůstatek</th><th class="owner-only"><span class="sr" style="position:absolute;left:-9999px">Akce</span></th></tr></thead>
       <tbody id="rows"></tbody>
     </table>
@@ -261,8 +266,15 @@ const parseAmt=s=>{const v=parseFloat(String(s).replace(/\s/g,'').replace(',','.
 
 let entries=[]; // {id,date,doc,text,type,amount,created}
 let settings={firm:'',ico:'',address:'',keeper:'',opening:0};
-let type='in', editing=null, period='all', view='all';
+let type='in', editing=null, period='all', view='all', catF='all';
 const VIEWL={in:'jen příjmy',out:'jen výdaje'};
+const CATS=['Tržba','Nákupy občerstvení','Pivo','Vybavení klubovna','Poplatky','Vybavení hasiči','Zálohy','Dary'];
+const NOCAT='__none__';
+const catName=c=>c===NOCAT?'bez kategorie':c;
+const catOk=e=>catF==='all'||(catF===NOCAT?!e.cat:e.cat===catF);
+const shown=rows=>rows.filter(r=>(view==='all'||r.e.type===view)&&catOk(r.e));
+const sumsOf=rows=>rows.reduce((a,{e})=>{if(e.type==='in')a.inc+=e.amount;else a.out+=e.amount;return a},{inc:0,out:0});
+const filterLabel=()=>periodLabel(period)+(view==='all'?'':' – '+VIEWL[view])+(catF==='all'?'':' – kategorie: '+catName(catF));
 const LKEY='pokladni-kniha-v1';
 
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('on'),1800)}
@@ -315,36 +327,57 @@ function buildPeriods(){
   if(!opts.includes(period))period='all';
   sel.innerHTML=opts.map(o=>`<option value="${o}" ${o===period?'selected':''}>${o.length===7?'\u2003':''}${esc(periodLabel(o))}</option>`).join('');
 }
+function buildCats(){
+const extra=[...new Set(entries.map(e=>e.cat).filter(c=>c&&!CATS.includes(c)))].sort((a,b)=>a.localeCompare(b,'cs'));
+const opts=['all',...CATS,...extra,NOCAT];
+if(!opts.includes(catF))catF='all';
+const sel=$('catFilter');
+sel.innerHTML=opts.map(o=>`<option value="${esc(o)}" ${o===catF?'selected':''}>${esc(o==='all'?'Všechny kategorie':catName(o))}</option>`).join('');
+sel.classList.toggle('on',catF!=='all');
+}
 function render(){
-  buildPeriods();
-  const c=compute(period), total=compute('all');
+buildPeriods(); buildCats();
+const c=compute(period), total=compute('all'), catOn=catF!=='all';
+const vis=shown(c.rows), t=sumsOf(vis);
   $('curBal').textContent=money(total.end);
   document.querySelector('.sum.inc').hidden=view==='out';document.querySelector('.sum.exp').hidden=view==='in';
-  $('sOpen').textContent=money(c.open);$('sIn').textContent=money(c.inc);$('sOut').textContent=money(c.out);$('sEnd').textContent=money(c.end);
+  $('sOpen').parentNode.hidden=catOn;
+  $('sOpen').textContent=money(c.open);
+  $('sIn').textContent=money(catOn?t.inc:c.inc);$('sOut').textContent=money(catOn?t.out:c.out);
+  $('sEndLbl').textContent=catOn?(view==='all'?'Rozdíl příjmů a výdajů':'Počet zápisů'):'Konečný stav';
+  $('sEnd').textContent=catOn?(view==='all'?money(t.inc-t.out):String(vis.length)):money(c.end);
+  $('bookTable').classList.toggle('nobal',catOn);
+  $('catNote').hidden=!catOn;
+  $('catNote').textContent=catOn?'Zobrazeny jen zápisy v kategorii „'+catName(catF)+'“ ('+vis.length+'). Zůstatek a stav pokladny se při filtru podle kategorie nezobrazují, platí jen pro celou pokladnu.':'';
   $('firmline').textContent=settings.firm?[settings.firm,settings.ico?'IČO '+settings.ico:''].filter(Boolean).join(', '):'Doplňte název firmy v nastavení níže';
   const tb=$('rows');
-  const vis=c.rows.filter(r=>view==='all'||r.e.type===view);
-  if(!vis.length){tb.innerHTML=`<tr><td colspan="7" class="empty">${entries.length?'V tomto období nejsou žádné zápisy.':(document.body.classList.contains('ro')?'Zatím tu nejsou žádné zápisy.':'Zatím tu nic není. Zapište první příjem nebo výdaj nahoře.')}</td></tr>`;}
+  if(!vis.length){tb.innerHTML=`<tr><td colspan="7" class="empty">${entries.length?(catOn?'V tomto období nejsou v této kategorii žádné zápisy.':'V tomto období nejsou žádné zápisy.'):(document.body.classList.contains('ro')?'Zatím tu nejsou žádné zápisy.':'Zatím tu nic není. Zapište první příjem nebo výdaj nahoře.')}</td></tr>`;}
   else tb.innerHTML=vis.slice().reverse().map(({e,bal})=>`<tr><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}${e.cat?'<span class="catlbl">'+esc(e.cat)+'</span>':''}</td>
       <td class="n ${e.type==='in'?'in':''}">${e.type==='in'?money(e.amount):''}</td>
       <td class="n ${e.type==='out'?'out':''}">${e.type==='out'?money(e.amount):''}</td>
       <td class="n">${money(bal)}</td>
       <td class="act owner-only"><button data-edit="${e.id}">Upravit</button><button class="del" data-del="${e.id}">Smazat</button></td></tr>`).join('')+
-    (view==='all'?`<tr class="openrow"><td colspan="5">Počáteční stav</td><td class="n">${money(c.open)}</td><td class="owner-only"></td></tr>`:'');
+      (view==='all'&&!catOn?`<tr class="openrow"><td colspan="5">Počáteční stav</td><td class="n">${money(c.open)}</td><td class="owner-only"></td></tr>`:'');
   if(!editing&&!$('fDoc').dataset.touched)$('fDoc').value=nextDoc(type,$('fDate').value);
   if(window.PK&&window.PK.onRender)try{window.PK.onRender()}catch(x){console.error(x)}
 }
 function sheetHTML(){
-  const c=compute(period); const s=settings;
-  const rows=c.rows.filter(r=>view==='all'||r.e.type===view).map(({e,bal},i)=>`<tr><td>${i+1}</td><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td><td class="n in">${e.type==='in'?money(e.amount):''}</td><td class="n out">${e.type==='out'?money(e.amount):''}</td><td class="n">${money(bal)}</td></tr>`).join('')
-    ||`<tr><td colspan="7" style="text-align:center;padding:14pt">Žádné zápisy</td></tr>`;
+const c=compute(period); const s=settings, catOn=catF!=='all';
+const vis=shown(c.rows), t=sumsOf(vis), cols=catOn?6:7;
+const rows=vis.map(({e,bal},i)=>`<tr><td>${i+1}</td><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}</td><td class="n in">${e.type==='in'?money(e.amount):''}</td><td class="n out">${e.type==='out'?money(e.amount):''}</td>${catOn?'':`<td class="n">${money(bal)}</td>`}</tr>`).join('')
+||`<tr><td colspan="${cols}" style="text-align:center;padding:14pt">Žádné zápisy</td></tr>`;
+const openRow=catOn?'':`<tr><td></td><td colspan="5"><i>Počáteční stav</i></td><td class="n">${money(c.open)}</td></tr>`;
+const foot=catOn?`<tr><td colspan="4">Celkem za období a kategorii</td><td class="n">${money(t.inc)}</td><td class="n">${money(t.out)}</td></tr>`
+:`<tr><td colspan="4">Celkem za období</td><td class="n">${money(c.inc)}</td><td class="n">${money(c.out)}</td><td class="n">${money(c.end)}</td></tr>`;
+const tot=catOn?`<span>Příjmy: <b>${money(t.inc)}</b></span><span>Výdaje: <b>${money(t.out)}</b></span>${view==='all'?`<span>Rozdíl: <b>${money(t.inc-t.out)}</b></span>`:''}`
+:`<span>Počáteční stav: <b>${money(c.open)}</b></span><span>Konečný stav: <b>${money(c.end)}</b></span>`;
   return `<div class="sh">
   <div class="hd"><div><h1>Pokladní kniha</h1><div class="meta">${esc(s.firm||'')}${s.ico?'<br>IČO: '+esc(s.ico):''}${s.address?'<br>'+esc(s.address):''}</div></div>
-  <div class="meta r">Období: <b>${esc(periodLabel(period))}${view==='all'?'':' – '+VIEWL[view]}</b><br>Měna: CZK<br>Vytištěno: ${czDate(today())}</div></div>
-  <table><thead><tr><th>Č.</th><th>Datum</th><th>Doklad</th><th>Text</th><th class="n">Příjem</th><th class="n">Výdaj</th><th class="n">Zůstatek</th></tr></thead>
-  <tbody><tr><td></td><td colspan="5"><i>Počáteční stav</i></td><td class="n">${money(c.open)}</td></tr>${rows}</tbody>
-  <tfoot><tr><td colspan="4">Celkem za období</td><td class="n">${money(c.inc)}</td><td class="n">${money(c.out)}</td><td class="n">${money(c.end)}</td></tr></tfoot></table>
-  <div class="tot"><span>Počáteční stav: <b>${money(c.open)}</b></span><span>Konečný stav: <b>${money(c.end)}</b></span></div>
+  <div class="meta r">Období: <b>${esc(filterLabel())}</b><br>Měna: CZK<br>Vytištěno: ${czDate(today())}</div></div>
+  <table><thead><tr><th>Č.</th><th>Datum</th><th>Doklad</th><th>Text</th><th class="n">Příjem</th><th class="n">Výdaj</th>${catOn?'':'<th class="n">Zůstatek</th>'}</tr></thead>
+  <tbody>${openRow}${rows}</tbody>
+  <tfoot>${foot}</tfoot></table>
+  <div class="tot">${tot}</div>
   <div class="sig"><div>Pokladník${s.keeper?': '+esc(s.keeper):''}</div><div>Kontroloval</div><div>Datum a razítko</div></div>
   </div>`;
 }
@@ -377,6 +410,7 @@ $('rows').onclick=ev=>{
   if(dl){const e=entries.find(x=>x.id===dl.dataset.del);if(e&&confirm('Smazat zápis „'+e.text+'“ ('+money(e.amount)+')?')){removeEntry(e.id);toast('Smazáno')}}
 };
 $('period').onchange=e=>{period=e.target.value;render()};
+$('catFilter').onchange=e=>{catF=e.target.value;render()};
 document.querySelectorAll('#viewTabs button').forEach(b=>b.onclick=()=>{view=b.dataset.v;document.querySelectorAll('#viewTabs button').forEach(x=>x.setAttribute('aria-pressed',x===b));render()});
 
 /* ---------- nastavení ---------- */
@@ -397,27 +431,32 @@ function loadPdf(){if(window.pdfMake&&window.pdfMake.vfs)return Promise.resolve(
   pdfLib=loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/pdfmake.min.js').then(()=>loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.10/vfs_fonts.js')).catch(e=>{pdfLib=null;throw e});return pdfLib}
 const isTouch=()=>window.matchMedia&&window.matchMedia('(pointer:coarse)').matches;
 function pdfDoc(){
-  const c=compute(period), s=settings, m=v=>money(v).replace(/\u202F/g,'\u00A0');
+const c=compute(period), s=settings, m=v=>money(v).replace(/\u202F/g,'\u00A0'), catOn=catF!=='all';
+const vis=shown(c.rows), t=sumsOf(vis), cols=catOn?6:7;
   const H=(t,al)=>({text:t,bold:true,fillColor:'#E9EEEC',fontSize:8.5,alignment:al||'left'});
   const R=t=>({text:t,alignment:'right',noWrap:true});
   const F=(t,al)=>({text:t,bold:true,fillColor:'#E9EEEC',alignment:al||'left',noWrap:!!al});
-  const body=[[H('Č.'),H('Datum'),H('Doklad'),H('Text'),H('Příjem','right'),H('Výdaj','right'),H('Zůstatek','right')]];
-  body.push(['',{text:'Počáteční stav',italics:true,colSpan:5},'','','','',R(m(c.open))]);
-  c.rows.filter(r=>view==='all'||r.e.type===view).forEach(({e,bal},i)=>body.push([String(i+1),{text:czDate(e.date),noWrap:true},e.doc||'',e.text||'',R(e.type==='in'?m(e.amount):''),R(e.type==='out'?m(e.amount):''),R(m(bal))]));
-  if(!c.rows.length)body.push([{text:'Žádné zápisy',colSpan:7,alignment:'center',margin:[0,6]},'','','','','','']);
-  body.push([{...F('Celkem za období'),colSpan:4},'','','',F(m(c.inc),'right'),F(m(c.out),'right'),F(m(c.end),'right')]);
+  const head=[H('Č.'),H('Datum'),H('Doklad'),H('Text'),H('Příjem','right'),H('Výdaj','right')]; if(!catOn)head.push(H('Zůstatek','right'));
+  const body=[head];
+  if(!catOn)body.push(['',{text:'Počáteční stav',italics:true,colSpan:5},'','','','',R(m(c.open))]);
+  vis.forEach(({e,bal},i)=>{const r=[String(i+1),{text:czDate(e.date),noWrap:true},e.doc||'',e.text||'',R(e.type==='in'?m(e.amount):''),R(e.type==='out'?m(e.amount):'')];if(!catOn)r.push(R(m(bal)));body.push(r)});
+  if(!vis.length)body.push([{text:'Žádné zápisy',colSpan:cols,alignment:'center',margin:[0,6]},...Array(cols-1).fill('')]);
+  if(catOn)body.push([{...F('Celkem za období a kategorii'),colSpan:4},'','','',F(m(t.inc),'right'),F(m(t.out),'right')]);
+  else body.push([{...F('Celkem za období'),colSpan:4},'','','',F(m(c.inc),'right'),F(m(c.out),'right'),F(m(c.end),'right')]);
   const firm=[s.firm||'',s.ico?'IČO: '+s.ico:'',s.address||''].filter(Boolean).join('\n');
   const sig=t=>({stack:[{canvas:[{type:'line',x1:0,y1:0,x2:150,y2:0,lineWidth:0.7}]},{text:t,fontSize:8,alignment:'center',margin:[0,3,0,0]}]});
-  return {pageSize:'A4',pageMargins:[32,32,32,40],defaultStyle:{fontSize:9},info:{title:'Pokladní kniha – '+periodLabel(period)},
+  const totals=catOn?['Příjmy: ',{text:m(t.inc),bold:true},'   Výdaje: ',{text:m(t.out),bold:true},...(view==='all'?['   Rozdíl: ',{text:m(t.inc-t.out),bold:true}]:[])]
+  :['Počáteční stav: ',{text:m(c.open),bold:true},' Konečný stav: ',{text:m(c.end),bold:true}];
+  return {pageSize:'A4',pageMargins:[32,32,32,40],defaultStyle:{fontSize:9},info:{title:'Pokladní kniha – '+filterLabel()},
     footer:(cp,pc)=>({text:'Strana '+cp+' / '+pc,alignment:'right',fontSize:7,color:'#555',margin:[0,12,32,0]}),
     content:[
       {columns:[{stack:[{text:'Pokladní kniha',fontSize:22,bold:true},{text:firm,margin:[0,4,0,0]}]},
-        {width:'auto',alignment:'right',stack:[{text:['Období: ',{text:periodLabel(period)+(view==='all'?'':' – '+VIEWL[view]),bold:true}]},'Měna: CZK','Vytištěno: '+czDate(today())]}]},
+      {width:'auto',alignment:'right',stack:[{text:['Období: ',{text:filterLabel(),bold:true}]},'Měna: CZK','Vytištěno: '+czDate(today())]}]},
       {canvas:[{type:'line',x1:0,y1:6,x2:531,y2:6,lineWidth:1.5}],margin:[0,0,0,10]},
-      {table:{headerRows:1,dontBreakRows:true,widths:[18,56,60,'*',64,64,68],body},
+      {table:{headerRows:1,dontBreakRows:true,widths:catOn?[18,56,60,'*',72,72]:[18,56,60,'*',64,64,68],body},
        layout:{hLineWidth:()=>0.5,vLineWidth:()=>0.5,hLineColor:()=>'#999',vLineColor:()=>'#999',paddingTop:()=>3,paddingBottom:()=>3,
          fillColor:(r,node)=>r>1&&r<node.table.body.length-1&&r%2===0?'#F6F8F7':null}},
-      {text:['Počáteční stav: ',{text:m(c.open),bold:true},'      Konečný stav: ',{text:m(c.end),bold:true}],alignment:'right',fontSize:10,margin:[0,8,0,0]},
+         {text:totals,alignment:'right',fontSize:10,margin:[0,8,0,0]},
       {columns:[sig('Pokladník'+(s.keeper?': '+s.keeper:'')),sig('Kontroloval'),sig('Datum a razítko')],columnGap:20,margin:[0,48,0,0],unbreakable:true}
     ]};
 }
@@ -425,7 +464,7 @@ async function makePdf(btn){
   btn.disabled=true;const lbl=btn.textContent;btn.textContent='Připravuji PDF…';
   try{
     await loadPdf();
-    const name='pokladni-kniha-'+period+'.pdf';
+    const name='pokladni-kniha-'+period+(catF==='all'?'':'-'+catName(catF).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-'))+'.pdf';
     const blob=await new Promise(ok=>pdfMake.createPdf(pdfDoc()).getBlob(ok));
     const file=new File([blob],name,{type:'application/pdf'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){
