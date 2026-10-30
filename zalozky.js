@@ -768,6 +768,50 @@ function lawsHTML(){
     'Jednotku sboru dobrovolných hasičů obce (JSDH) zřizuje a vybavuje obec; technika a výstroj jednotky je majetkem obce, ne spolku SDH.',
     'Do knihy majetku sboru patří jen to, co sbor pořídil ze svých peněz.'])}
 
+  ${S('9. Předpisy SH ČMS (dh.cz)')}
+  ${L('Stanovy SH ČMS ve znění ze 12. 4. 2025','https://www.dh.cz/images/Dokumenty/novelizace-stanov/Stanovy_SH_CMS_schvalena_verze_12.4.2025.pdf',[
+    'Platí od 12. 4. 2025, ustanovení o SDH jsou účinná od 1. 12. 2025. Nahrazují stanovy z 9. 7. 2021.',
+    '<b>Statutární orgán SDH</b> – starosta a jeho 1. náměstek; za sbor jedná každý z nich samostatně, nebo oba společně (čl. 5).',
+    '<b>Valná hromada SDH</b> (členové starší 18 let) se koná nejméně jednou ročně. Rozhoduje o ročním rozpočtu, plánu činnosti a výši členských příspěvků, bere na vědomí zprávu revizora a zprávy o hospodaření (čl. 49).',
+    '<b>Revizor SDH</b> je jedna osoba volená valnou hromadou. Nesmí být ve statutárním ani výkonném orgánu (výboru) na žádném stupni a nesmí zpracovávat účetnictví sboru (čl. 14).',
+    'Kontroly se provádějí podle plánu kontrolní činnosti, zpravidla nejméně dvakrát ročně; z každé kontroly se sepisuje zápis se zjištěními a návrhy opatření (čl. 16).',
+    'Veškerý majetek se eviduje a inventarizuje; z dokladů musí být zřejmé, jak, z jakých zdrojů a k jakému účelu byl pořízen. Účetní, smluvní a pracovněprávní agenda se vede odděleně od ostatních písemností (čl. 13, 58).',
+    'Hospodaří se podle ročního rozpočtu, který sestavuje výbor a schvaluje valná hromada (čl. 57).',
+    'Vedlejší výdělečná činnost (mj. hostinská činnost, prodej lihovin) je vyjmenována v příloze č. 1; výnosy patří sboru, ztráty musí sbor vyrovnat sám (čl. 60).',
+    'Sbor vybírá členské příspěvky i za vyšší stupně: podíl okrsku s p. o. odešle okrsku, podíl OSH, KSH a SH ČMS odešle na OSH (čl. 59).'],
+    'Přehled všech vnitřních dokumentů SH ČMS: <a href="https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty" target="_blank" rel="noopener">dh.cz – Vnitroorganizační – Dokumenty</a>.')}
+  ${L('Organizační řád SH ČMS 2025','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/2956-organizacni-rad-2025',[
+    'Prováděcí předpis ke stanovám s přílohami: členská přihláška, vzory razítek, registrační list SDH a vzory pro zápis změn do spolkového rejstříku (např. výpis z usnesení valné hromady SDH).'])}
+  ${L('Zabezpečení valných hromad SDH 2026','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/3257-zabezpeceni-valnych-hromad-sdh-a-valnych-hromad-okrsku-s-p-o-2026',[
+    'Pokyny SH ČMS a vzory k valné hromadě sboru; vydávají se každý rok.',
+    'Valná hromada obvykle schvaluje zprávu o činnosti a hospodaření, účetní závěrku, zprávu revizora, rozpočet a plán činnosti na další rok – podklady k tomu jsou v záložce Formuláře.'])}
+  ${L('Metodický pokyn pro provádění kontrolní činnosti','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/787-metodicky-pokyn-kontrolni-cinnost',[
+    'Metodika kontrolních orgánů SH ČMS pro revizory – podle ní se plánují a provádějí kontroly hospodaření a pokladny.'])}
+  ${L('Příručka funkcionáře sboru 2019','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/917-prirucka-funckionare-sboru',[
+    '<b>Hospodář (pokladník)</b> odpovídá výboru za dodržování předpisů o hospodaření, vede evidenci majetku sboru a doklady předkládá na požádání revizorovi.',
+    '<b>Revizor</b> dohlíží na hospodaření a nakládání s majetkem a provádí inventarizaci pokladní hotovosti.',
+    'Obsahuje vzor zprávy o hospodaření sboru a zprávy revizora.'],
+    'Příručka je z roku 2019 a vychází ze starších stanov; při rozporu platí stanovy z roku 2025.')}
+  ${L('Metodický pokyn č. 1/2022 – ekonomické, účetní a daňové zásady','https://www.dh.cz/index.php/ekonomika/ucetnictvi/54-metodicky-pokyn-c-2-2021-ekonomicke-ucetni-a-danove-zasady-pro-zajisteni-ekonomickych-cinnosti-organizacnich-jednotek-sdruzeni-hasicu-cech-moravy-a-slezska',[
+    'Hlavní metodika SH ČMS k účetnictví a daním pobočných spolků (tedy i SDH).'])}
+  ${L('Inventarizace a účetní uzávěrka k 31. 12. 2025','https://www.dh.cz/index.php/ekonomika/inventarizace/2948-inventarizace-a-ucetni-uzaverka-sh-cms-k-31-12-2025',[
+    'Příkaz k inventarizaci a směrnice k provedení inventarizace majetku. SH ČMS je vydává každý rok – k uzávěrce roku 2026 hledejte novou verzi v sekci Ekonomika – Inventarizace.'])}
+  ${L('Směrnice I/18-2021 – cestovní náhrady pro rok 2026','https://www.dh.cz/index.php/ekonomika/ucetnictvi/1635-smernice-sh-cms-i-18-2021-cestovni-nahrady-vcetne-priloh-pro-rok-2026',[
+    'Podle ní se proplácejí cestovní náhrady (cesty členů na akce, školení apod.).'])}
+  ${L('Elektronický peněžní deník','https://www.dh.cz/index.php/ekonomika/ucetnictvi/1978-elektronicky-financni-denik',[
+    'Pomůcka SH ČMS pro vedení peněžního deníku v jednoduchém účetnictví.'])}
+  ${L('Spisový, archivní a skartační řád','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/24-spisovy-archivni-a-skartacni-rad',[
+    'Jak zacházet s písemnostmi a doklady a jak je archivovat a vyřazovat.'])}
+  ${L('Jednací a volební řád 2018 a hlasování per rollam','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/526-jednaci-a-volebni-rad-2018',[
+    'Pravidla jednání a voleb orgánů SH ČMS.',
+    'Hlasování na dálku upravuje <a href="https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/1247-jednaci-rad-pro-hlasovani-per-rollam" target="_blank" rel="noopener">Jednací řád pro hlasování per rollam</a>.'])}
+  ${L('Datové schránky SDH','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/1905-datove-schranky-aktivace-a-zakladni-nastaveni-datove-schranky-sdh',[
+    'Návod k aktivaci a nastavení datové schránky sboru – přes ni se podává daňové přiznání.',
+    'Základní obsluha: <a href="https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/1930-datove-schranky-zakladni-obsluha-datove-schranky" target="_blank" rel="noopener">Datové schránky – základní obsluha</a>.'])}
+  ${L('Evidence skutečných majitelů','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/750-informace-k-zapisu-do-rejstriku-skutecnych-majitelu',[
+    'Informace SH ČMS k zápisu sboru do evidence skutečných majitelů.',
+    'Úplný výpis: <a href="https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/1535-ziskani-uplneho-vypisu-z-evidence-skutecnych-majitelu" target="_blank" rel="noopener">Získání úplného výpisu z evidence</a>.'])}
+
   <p class="note">Ověřeno z veřejných zdrojů (zákony v platném znění, Finanční správa, SZPI, KHS, ČOI, metodika SH ČMS) k 27. 10. 2026. Legislativa se mění – před důležitým rozhodnutím ověřte aktuální znění nebo se obraťte na okresní sdružení hasičů, daňového poradce či příslušný úřad.</p>`;
 }
 
