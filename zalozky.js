@@ -314,8 +314,8 @@ const CHECKS=[
  ['zastupce','Odpovědný zástupce pro hostinskou činnost je aktuální; změny se hlásí živnostenskému úřadu.'],
  ['zalohy','Každá vydaná záloha je vyúčtovaná: doklady za utracené peníze jsou zapsané jako výdaj a nevyčerpaný zbytek jako vrácení zálohy.'],
  ['pujcky','Půjčky a jejich splátky jsou vedené v knize pohledávek a závazků, ne jako běžný výdaj či příjem.'],
- ['inventura','Revizor kontroluje pokladní hotovost (nejméně 4× ročně) a o kontrole je zápis se stavem hotovosti.'],
- ['revizor','Revizor sboru je zvolen valnou hromadou a není členem výboru (starosta, náměstek, velitel, hospodář ani jiný člen výboru revizorem být nemůže).'],
+ ['inventura','Revizor kontroluje pokladní hotovost (podle stanov minimálně 2× ročně) a o kontrole je zápis se stavem hotovosti.'],
+ ['revizor','Revizor sboru je zvolen valnou hromadou, není členem výboru (starosta, náměstek, velitel, hospodář ani jiný člen výboru revizorem být nemůže) a nevede účetnictví sboru.'],
  ['majetek','K 31. 12. proběhne inventarizace majetku a pokladní hotovosti.'],
  ['archiv','Doklady a knihy se archivují nejméně 5 let po skončení roku.'],
  ['provozovna','Klubovna (a stánek na akcích) je oznámena jako provozovna a označena názvem, IČO, odpovědnou osobou a prodejní dobou.'],
@@ -547,7 +547,7 @@ async function docRev(){const o=await orgInfo(); const t=PK.today(); const book=
     {columns:[{stack:['Datum a čas kontroly: ____________________','Místo: ____________________']},{stack:[{text:['Stav podle pokladní knihy k '+czDate(t)+': ',{text:kc(book),bold:true}]},'Poslední příjmový doklad: '+lastOf('in'),'Poslední výdajový doklad: '+lastOf('out')]}],columnGap:20,margin:[0,0,0,12]},
     {columns:[{width:260,...tbl([90,80,80],body)},{stack:[{text:'Výsledek',bold:true,margin:[0,0,0,6]},'Stav podle knihy: '+kc(book),'Skutečný stav: ____________________','Rozdíl (+ přebytek / − schodek): ____________',{text:'Kontrolované doklady (od – do): __________________________',margin:[0,10,0,0]},'Zápisy v knize odpovídají dokladům:  ano  /  ne',{text:'Zjištění a opatření:',margin:[0,10,0,2]},'_____________________________________________','_____________________________________________','_____________________________________________',{text:'Vyjádření pokladníka:',margin:[0,10,0,2]},'_____________________________________________','_____________________________________________']}],columnGap:22},
     sign(['Revizor sboru','Pokladník / hospodář'+(o.keeper?' ('+o.keeper+')':''),'Starosta sboru (seznámen)']),
-    {text:'Revizor nesmí být členem výboru sboru. Kontrola se provádí nejméně 4× ročně; zápis se ukládá k pokladní knize.',fontSize:8,color:'#555',margin:[0,14,0,0]}]};}
+    {text:'Revizor nesmí být členem výboru sboru ani vést jeho účetnictví. Kontrola se provádí minimálně 2× ročně (čl. 16 stanov SH ČMS); zápis se ukládá k pokladní knize.',fontSize:8,color:'#555',margin:[0,14,0,0]}]};}
 async function docTax(y){const o=await orgInfo(); const D=dppo(y),R=D.R,ds=dpSettings(),ico=String(o.ico||'').replace(/\D/g,'');
   const box=t=>({text:' '+t+' ',bold:true,font:'Roboto',background:'#ffffff'});
   const body=[[{text:'Ř.',bold:true,fillColor:'#dde3e6',alignment:'center'},{text:'II. ODDÍL – DAŇ Z PŘÍJMŮ PRÁVNICKÝCH OSOB',bold:true,fillColor:'#dde3e6'},{text:'Kč',bold:true,fillColor:'#dde3e6',alignment:'right'}]].concat(DP_ROWS.map(([r,t,sub])=>{const off=D.loss&&r>=230&&r<=330; const hl=[200,220,270,290,340].includes(r);
@@ -673,8 +673,8 @@ function lawsHTML(){
   ${L('Stanovy a vnitřní předpisy SH ČMS','https://www.dh.cz',[
     'Stanovy SH ČMS, organizační, jednací a volební řád a směrnice o hospodaření jsou pro sbor závazné.',
     'Revizora volí a odvolává valná hromada sboru; na jednání výboru má jen hlas poradní.',
-    'Revizor nesmí být současně členem výkonného nebo statutárního orgánu na stejném stupni – revizorem tedy nemůže být starosta ani jiný člen výboru.',
-    'Revizor kontroluje hospodaření včetně pokladní hotovosti nejméně 4× ročně a o kontrole sepíše zápis (formulář je v záložce Formuláře).'])}
+    'Revizor nesmí být členem výkonného ani statutárního orgánu na žádném stupni a nesmí zpracovávat účetnictví sboru – revizorem tedy nemůže být starosta, jiný člen výboru ani ten, kdo vede účetnictví sboru (čl. 14 stanov).',
+    'Revizor kontroluje hospodaření včetně pokladní hotovosti podle plánu kontrolní činnosti, minimálně 2× ročně, a o kontrole sepíše zápis (čl. 16 stanov; formulář je v záložce Formuláře).'])}
   ${L('Zákon č. 37/2021 Sb., o evidenci skutečných majitelů','https://www.zakonyprolidi.cz/cs/2021-37',[
     'Spolek je evidující osobou – musí mít v evidenci skutečných majitelů zapsané správné údaje (u spolků zpravidla členové statutárního orgánu).',
     'Při žádosti o dotaci ze státního rozpočtu musí spolek předložit jako povinnou přílohu úplný výpis z evidence skutečných majitelů.',
@@ -774,7 +774,7 @@ function lawsHTML(){
     '<b>Statutární orgán SDH</b> – starosta a jeho 1. náměstek; za sbor jedná každý z nich samostatně, nebo oba společně (čl. 5).',
     '<b>Valná hromada SDH</b> (členové starší 18 let) se koná nejméně jednou ročně. Rozhoduje o ročním rozpočtu, plánu činnosti a výši členských příspěvků, bere na vědomí zprávu revizora a zprávy o hospodaření (čl. 49).',
     '<b>Revizor SDH</b> je jedna osoba volená valnou hromadou. Nesmí být ve statutárním ani výkonném orgánu (výboru) na žádném stupni a nesmí zpracovávat účetnictví sboru (čl. 14).',
-    'Kontroly se provádějí podle plánu kontrolní činnosti, zpravidla nejméně dvakrát ročně; z každé kontroly se sepisuje zápis se zjištěními a návrhy opatření (čl. 16).',
+    'Kontroly se provádějí podle plánu kontrolní činnosti, minimálně dvakrát ročně; z každé kontroly se sepisuje zápis se zjištěními a návrhy opatření (čl. 16).',
     'Veškerý majetek se eviduje a inventarizuje; z dokladů musí být zřejmé, jak, z jakých zdrojů a k jakému účelu byl pořízen. Účetní, smluvní a pracovněprávní agenda se vede odděleně od ostatních písemností (čl. 13, 58).',
     'Hospodaří se podle ročního rozpočtu, který sestavuje výbor a schvaluje valná hromada (čl. 57).',
     'Vedlejší výdělečná činnost (mj. hostinská činnost, prodej lihovin) je vyjmenována v příloze č. 1; výnosy patří sboru, ztráty musí sbor vyrovnat sám (čl. 60).',
@@ -784,9 +784,10 @@ function lawsHTML(){
     'Prováděcí předpis ke stanovám s přílohami: členská přihláška, vzory razítek, registrační list SDH a vzory pro zápis změn do spolkového rejstříku (např. výpis z usnesení valné hromady SDH).'])}
   ${L('Zabezpečení valných hromad SDH 2026','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/3257-zabezpeceni-valnych-hromad-sdh-a-valnych-hromad-okrsku-s-p-o-2026',[
     'Pokyny SH ČMS a vzory k valné hromadě sboru; vydávají se každý rok.',
-    'Valná hromada obvykle schvaluje zprávu o činnosti a hospodaření, účetní závěrku, zprávu revizora, rozpočet a plán činnosti na další rok – podklady k tomu jsou v záložce Formuláře.'])}
+    'Podle stanov valná hromada rozhoduje o ročním rozpočtu a plánu činnosti a zprávu revizora a zprávy o činnosti a hospodaření bere na vědomí (čl. 49).'])}
   ${L('Metodický pokyn pro provádění kontrolní činnosti','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/787-metodicky-pokyn-kontrolni-cinnost',[
-    'Metodika kontrolních orgánů SH ČMS pro revizory – podle ní se plánují a provádějí kontroly hospodaření a pokladny.'])}
+    'Metodika kontrolních orgánů SH ČMS pro revizory – podle ní se plánují a provádějí kontroly hospodaření a pokladny.'],
+    'Pokyn je z roku 2017, tedy starší než stanovy z roku 2025; při rozporu platí stanovy.')}
   ${L('Příručka funkcionáře sboru 2019','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/917-prirucka-funckionare-sboru',[
     '<b>Hospodář (pokladník)</b> odpovídá výboru za dodržování předpisů o hospodaření, vede evidenci majetku sboru a doklady předkládá na požádání revizorovi.',
     '<b>Revizor</b> dohlíží na hospodaření a nakládání s majetkem a provádí inventarizaci pokladní hotovosti.',
@@ -801,9 +802,10 @@ function lawsHTML(){
   ${L('Elektronický peněžní deník','https://www.dh.cz/index.php/ekonomika/ucetnictvi/1978-elektronicky-financni-denik',[
     'Pomůcka SH ČMS pro vedení peněžního deníku v jednoduchém účetnictví.'])}
   ${L('Spisový, archivní a skartační řád','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/24-spisovy-archivni-a-skartacni-rad',[
-    'Jak zacházet s písemnostmi a doklady a jak je archivovat a vyřazovat.'])}
+    'Jak zacházet s písemnostmi a doklady a jak je archivovat a vyřazovat.'],
+    'Řád je starší než stanovy z roku 2025 (používá ještě dřívější označení orgánů); při rozporu platí stanovy.')}
   ${L('Jednací a volební řád 2018 a hlasování per rollam','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/526-jednaci-a-volebni-rad-2018',[
-    'Pravidla jednání a voleb orgánů SH ČMS.',
+    'Pravidla jednání a voleb orgánů SH ČMS. Řád je z roku 2018, tedy starší než stanovy z roku 2025; při rozporu platí stanovy.',
     'Hlasování na dálku upravuje <a href="https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/1247-jednaci-rad-pro-hlasovani-per-rollam" target="_blank" rel="noopener">Jednací řád pro hlasování per rollam</a>.'])}
   ${L('Datové schránky SDH','https://www.dh.cz/index.php/usek-vnitroorganizacni/dokumenty/1905-datove-schranky-aktivace-a-zakladni-nastaveni-datove-schranky-sdh',[
     'Návod k aktivaci a nastavení datové schránky sboru – přes ni se podává daňové přiznání.',
