@@ -63,6 +63,12 @@ input,select{font:inherit;color:var(--ink);background:var(--paper);border:1px so
 .toolbar .f{grid-column:auto;min-width:180px}
 #catFilter.on{border-color:var(--teal);background:var(--teal-soft);color:var(--teal);font-weight:600}
 .catnote{font-size:13px;color:var(--muted);margin:-4px 0 12px}
+.att{display:inline-flex;flex-wrap:wrap;gap:4px;margin-left:6px;vertical-align:middle}
+.att button{font:inherit;font-size:12px;line-height:1.6;border:1px solid var(--line);background:var(--paper);color:var(--teal);border-radius:999px;padding:0 8px;cursor:pointer;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.att button:hover{border-color:var(--teal)}
+.att .chip{display:inline-flex;align-items:center}
+.att button.rm{border:0;background:none;color:var(--exp);font-size:15px;padding:0 4px}
+#fFiles{margin:6px 0 0}
 .sums{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:12px}
 @media(min-width:640px){.sums{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
 .sum{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -194,6 +200,7 @@ textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid 
       <div class="f s8"><label for="fText">Popis (text)</label><input id="fText" placeholder="např. Tržba za zboží, Nákup kancelářských potřeb"></div>
       <div class="f s4"><label for="fAmt">Částka (Kč)</label><input id="fAmt" inputmode="decimal" placeholder="0,00"></div>
       <div class="f s4"><label for="fCat">Kategorie</label><select id="fCat"><option value="">— bez kategorie —</option><option>Tržba</option><option>Nákupy občerstvení</option><option>Pivo</option><option>Vybavení klubovna</option><option>Poplatky</option><option>Vybavení hasiči</option><option>Zálohy</option><option>Dary</option></select></div>
+      <div class="f s8"><label for="fFile">Faktura nebo doklad (PDF nebo fotka, nejvýš 5 MB)</label><input type="file" id="fFile" accept="application/pdf,image/*" multiple><div class="att" id="fFiles"></div></div>
     </div>
     <div class="actions">
       <button class="btn primary" id="saveBtn" type="button">Zapsat</button>
@@ -275,6 +282,33 @@ const catOk=e=>catF==='all'||(catF===NOCAT?!e.cat:e.cat===catF);
 const shown=rows=>rows.filter(r=>(view==='all'||r.e.type===view)&&catOk(r.e));
 const sumsOf=rows=>rows.reduce((a,{e})=>{if(e.type==='in')a.inc+=e.amount;else a.out+=e.amount;return a},{inc:0,out:0});
 const filterLabel=()=>periodLabel(period)+(view==='all'?'':' – '+VIEWL[view])+(catF==='all'?'':' – kategorie: '+catName(catF));
+const MAXFILE=5*1024*1024, CHUNK=700000;
+let fileApi=null, formFiles=[], formRemoved=[];
+const fileChips=list=>list&&list.length?'<span class="att">'+list.map(f=>`<button type="button" data-file="${esc(f.id)}" data-name="${esc(f.name)}" title="Otevřít ${esc(f.name)}">📎 ${esc(f.name)}</button>`).join('')+'</span>':'';
+function renderFormFiles(){$('fFiles').innerHTML=formFiles.map(f=>`<span class="chip"><button type="button" data-file="${esc(f.id)}" data-name="${esc(f.name)}" title="Otevřít ${esc(f.name)}">📎 ${esc(f.name)}</button><button type="button" class="rm" data-rmfile="${esc(f.id)}" aria-label="Odebrat ${esc(f.name)}" title="Odebrat">×</button></span>`).join('')}
+async function openFile(id,name){
+  if(!fileApi){toast('Soubor jde otevřít jen při online připojení');return}
+  const w=window.open('','_blank');
+  if(w)try{w.document.title=name;w.document.body.textContent='Načítám '+name+'…'}catch(x){}
+  try{
+    const blob=await fileApi.get(id), url=URL.createObjectURL(blob);
+    if(w&&!w.closed)w.location.href=url;
+    else{const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove()}
+    setTimeout(()=>URL.revokeObjectURL(url),120000);
+  }catch(e){if(w)w.close();toast('Soubor se nepodařilo načíst')}
+}
+async function prepFile(f){
+  if(/^image\//.test(f.type)&&!/gif|svg/.test(f.type)){
+    try{
+      const bmp=await createImageBitmap(f), k=Math.min(1,2000/Math.max(bmp.width,bmp.height));
+      const c=document.createElement('canvas');c.width=Math.round(bmp.width*k);c.height=Math.round(bmp.height*k);
+      const g=c.getContext('2d');g.fillStyle='#fff';g.fillRect(0,0,c.width,c.height);g.drawImage(bmp,0,0,c.width,c.height);
+      const b=await new Promise(ok=>c.toBlob(ok,'image/jpeg',0.82));
+      if(b&&b.size<f.size)return new File([b],f.name.replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'});
+    }catch(x){}
+  }
+  return f;
+}
 const LKEY='pokladni-kniha-v1';
 
 function toast(t){const el=$('toast');el.textContent=t;el.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>el.classList.remove('on'),1800)}
@@ -352,7 +386,7 @@ const vis=shown(c.rows), t=sumsOf(vis);
   $('firmline').textContent=settings.firm?[settings.firm,settings.ico?'IČO '+settings.ico:''].filter(Boolean).join(', '):'Doplňte název firmy v nastavení níže';
   const tb=$('rows');
   if(!vis.length){tb.innerHTML=`<tr><td colspan="7" class="empty">${entries.length?(catOn?'V tomto období nejsou v této kategorii žádné zápisy.':'V tomto období nejsou žádné zápisy.'):(document.body.classList.contains('ro')?'Zatím tu nejsou žádné zápisy.':'Zatím tu nic není. Zapište první příjem nebo výdaj nahoře.')}</td></tr>`;}
-  else tb.innerHTML=vis.slice().reverse().map(({e,bal})=>`<tr><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}${e.cat?'<span class="catlbl">'+esc(e.cat)+'</span>':''}</td>
+  else tb.innerHTML=vis.slice().reverse().map(({e,bal})=>`<tr><td>${czDate(e.date)}</td><td>${esc(e.doc)}</td><td>${esc(e.text)}${e.cat?'<span class="catlbl">'+esc(e.cat)+'</span>':''}${fileChips(e.files)}</td>
       <td class="n ${e.type==='in'?'in':''}">${e.type==='in'?money(e.amount):''}</td>
       <td class="n ${e.type==='out'?'out':''}">${e.type==='out'?money(e.amount):''}</td>
       <td class="n">${money(bal)}</td>
@@ -384,30 +418,53 @@ const tot=catOn?`<span>Příjmy: <b>${money(t.inc)}</b></span><span>Výdaje: <b>
 
 /* ---------- formulář ---------- */
 function setType(t){type=t;$('tIn').setAttribute('aria-pressed',t==='in');$('tOut').setAttribute('aria-pressed',t==='out');if(!editing&&!$('fDoc').dataset.touched)$('fDoc').value=nextDoc(t,$('fDate').value)}
-function resetForm(){editing=null;$('fText').value='';$('fCat').value='';$('fAmt').value='';$('fDoc').dataset.touched='';$('fDate').value=today();$('saveBtn').textContent='Zapsat';$('cancelBtn').hidden=true;$('formTitle').textContent='Nový zápis';setType(type)}
+function resetForm(){editing=null;$('fText').value='';$('fCat').value='';$('fAmt').value='';$('fDoc').dataset.touched='';$('fDate').value=today();$('saveBtn').textContent='Zapsat';$('cancelBtn').hidden=true;$('formTitle').textContent='Nový zápis';$('fFile').value='';formFiles=[];formRemoved=[];renderFormFiles();setType(type)}
 $('tIn').onclick=()=>setType('in');$('tOut').onclick=()=>setType('out');
 $('fDoc').oninput=()=>{$('fDoc').dataset.touched='1'};
 $('fDate').onchange=()=>{if(!editing&&!$('fDoc').dataset.touched)$('fDoc').value=nextDoc(type,$('fDate').value)};
-$('saveBtn').onclick=()=>{
+$('saveBtn').onclick=async()=>{
   const amt=parseAmt($('fAmt').value), date=$('fDate').value, text=$('fText').value.trim();
-  const msg=$('formMsg');
+  const msg=$('formMsg'), btn=$('saveBtn');
   if(!date){msg.textContent='Vyplňte datum.';return}
   if(!(amt>0)){msg.textContent='Zadejte částku větší než nula, např. 1250,50.';$('fAmt').focus();return}
   if(!text){msg.textContent='Napište krátký popis, ať víte, za co pohyb byl.';$('fText').focus();return}
+  const picked=[...$('fFile').files];
+  if(picked.length&&!(cloud&&cloud.uploadFile)){msg.textContent='Faktury jde přikládat jen při online připojení.';return}
   msg.textContent='';
+  const wasEditing=editing;
   const base=editing?entries.find(e=>e.id===editing):null;
   const e={...(base||{}),id:base?base.id:'e_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7),date,doc:$('fDoc').value.trim()||nextDoc(type,date),text,type,amount:amt,created:base?base.created:Date.now()};
   const cv=$('fCat').value; if(cv)e.cat=cv; else delete e.cat;
-  putEntry(e); toast(editing?'Změny uloženy':'Zapsáno'); resetForm();
+  const files=[...formFiles], removed=[...formRemoved];
+  if(picked.length){
+    btn.disabled=true;const lbl=btn.textContent;btn.textContent='Nahrávám soubory…';
+    try{
+      for(const f0 of picked){
+        const f=await prepFile(f0);
+        if(f.size>MAXFILE){msg.textContent='Soubor „'+f0.name+'“ je větší než 5 MB. Zmenšete ho nebo naskenujte v nižším rozlišení.';return}
+        files.push(await cloud.uploadFile(e.id,f));
+      }
+    }catch(err){msg.textContent='Soubor se nepodařilo nahrát. Zápis se neuložil, zkuste to znovu.';return}
+    finally{btn.disabled=false;btn.textContent=lbl}
+  }
+  if(files.length)e.files=files; else delete e.files;
+  await putEntry(e); toast(wasEditing?'Změny uloženy':'Zapsáno'); resetForm();
+  if(removed.length&&cloud&&cloud.deleteFile)for(const id of removed){try{await cloud.deleteFile(id)}catch(x){}}
+};
+$('fFiles').onclick=ev=>{
+  const rm=ev.target.closest('[data-rmfile]'), op=ev.target.closest('[data-file]');
+  if(rm){const id=rm.dataset.rmfile;formFiles=formFiles.filter(f=>f.id!==id);formRemoved.push(id);renderFormFiles();$('formMsg').textContent='Soubor se odebere po uložení změn.';return}
+  if(op)openFile(op.dataset.file,op.dataset.name);
 };
 $('cancelBtn').onclick=resetForm;
 $('fAmt').onkeydown=e=>{if(e.key==='Enter')$('saveBtn').click()};
 $('rows').onclick=ev=>{
+  const fb=ev.target.closest('[data-file]');if(fb){openFile(fb.dataset.file,fb.dataset.name);return}
   const ed=ev.target.closest('[data-edit]'), dl=ev.target.closest('[data-del]');
   if(ed){const e=entries.find(x=>x.id===ed.dataset.edit);if(!e)return;editing=e.id;type=e.type;setType(e.type);
-    $('fDate').value=e.date;$('fDoc').value=e.doc;$('fCat').value=e.cat||'';$('fText').value=e.text;$('fAmt').value=String(e.amount).replace('.',',');
+    $('fDate').value=e.date;$('fDoc').value=e.doc;$('fCat').value=e.cat||'';$('fText').value=e.text;$('fAmt').value=String(e.amount).replace('.',',');$('fFile').value='';formFiles=[...(e.files||[])];formRemoved=[];renderFormFiles();$('formMsg').textContent='';
     $('saveBtn').textContent='Uložit změny';$('cancelBtn').hidden=false;$('formTitle').textContent='Úprava zápisu';window.scrollTo({top:0,behavior:'smooth'});$('fText').focus({preventScroll:true})}
-  if(dl){const e=entries.find(x=>x.id===dl.dataset.del);if(e&&confirm('Smazat zápis „'+e.text+'“ ('+money(e.amount)+')?')){removeEntry(e.id);toast('Smazáno')}}
+  if(dl){const e=entries.find(x=>x.id===dl.dataset.del);const nf=e&&e.files?e.files.length:0;if(e&&confirm('Smazat zápis „'+e.text+'“ ('+money(e.amount)+')'+(nf?' včetně přiložených souborů ('+nf+')':'')+'?')){const fl=e.files||[];removeEntry(e.id).then(async()=>{if(cloud&&cloud.deleteFile)for(const f of fl){try{await cloud.deleteFile(f.id)}catch(x){}}});toast('Smazáno')}}
 };
 $('period').onchange=e=>{period=e.target.value;render()};
 $('catFilter').onchange=e=>{catF=e.target.value;render()};
@@ -561,6 +618,17 @@ async function initCloud(){
   $('lPass').onkeydown=e=>{if(e.key==='Enter')readerLogin()};
   const bookDoc=FS.doc(db,'books','main');
   const ecol=FS.collection(db,'books','main','entries');
+  const fcol=FS.collection(db,'books','main','files');
+  fileApi={
+    async get(id){
+      const m=await FS.getDoc(FS.doc(fcol,id)); if(!m.exists())throw new Error('missing');
+      const d=m.data();
+      const parts=await Promise.all(Array.from({length:d.chunks},(_,i)=>FS.getDoc(FS.doc(fcol,id,'chunks',String(i))).then(c=>c.data().data)));
+      const bin=atob(parts.join('')), u=new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);
+      return new Blob([u],{type:d.type||'application/octet-stream'});
+    }
+  };
   const strip=e=>{const {id,...b}=e;return b};
   let unsubE=null,unsubS=null;
   const clearData=()=>{entries=[];settings={firm:'',ico:'',address:'',keeper:'',opening:0};fillSettings()};
@@ -573,6 +641,20 @@ async function initCloud(){
       cloud={
         saveEntry:e=>FS.setDoc(FS.doc(ecol,e.id),strip(e)),
         deleteEntry:id=>FS.deleteDoc(FS.doc(ecol,id)),
+        async uploadFile(entryId,file){
+          const buf=new Uint8Array(await file.arrayBuffer());let bin='';
+          for(let i=0;i<buf.length;i+=32768)bin+=String.fromCharCode.apply(null,buf.subarray(i,i+32768));
+          const b64=btoa(bin), n=Math.max(1,Math.ceil(b64.length/CHUNK));
+          const id='f_'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+          const meta={entryId,name:file.name,type:file.type||'application/octet-stream',size:file.size,chunks:n,created:Date.now()};
+          for(let i=0;i<n;i++)await FS.setDoc(FS.doc(fcol,id,'chunks',String(i)),{i,data:b64.slice(i*CHUNK,(i+1)*CHUNK)});
+          await FS.setDoc(FS.doc(fcol,id),meta);
+          return {id,name:meta.name,type:meta.type,size:meta.size};
+        },
+        async deleteFile(id){
+          const ch=await FS.getDocs(FS.collection(db,'books','main','files',id,'chunks'));
+          const b=FS.writeBatch(db);ch.docs.forEach(d=>b.delete(d.ref));b.delete(FS.doc(fcol,id));await b.commit();
+        },
         saveSettings:st=>FS.setDoc(bookDoc,{settings:{...st}},{merge:true}),
         async importAll(list,st,replace){
           if(replace){const old=await FS.getDocs(ecol);for(let i=0;i<old.docs.length;i+=400){const b=FS.writeBatch(db);old.docs.slice(i,i+400).forEach(d=>b.delete(d.ref));await b.commit()}}
